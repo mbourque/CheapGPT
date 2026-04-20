@@ -2,6 +2,8 @@
 
 CheapGPT is a lightweight ChatGPT-style web UI served by FastAPI, with chat responses proxied to a local or remote Ollama instance.
 
+![CheapGPT UI](assets/readme/cheapgpt-ui.png)
+
 ## Features
 
 - ChatGPT-like interface with chat history
@@ -84,6 +86,20 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 Use `127.0.0.1` if you only want local access.
+
+## Open in your browser
+
+After the server starts, open one of these URLs:
+
+- Local on the same machine: `http://127.0.0.1:8000`
+- Another device on your network or Tailnet (when running with `--host 0.0.0.0`): `http://<server-ip>:8000`
+- Public URL via Tailscale Funnel: `https://<your-node>.ts.net`
+
+Quick checks if it does not open:
+
+- Confirm service is running: `systemctl status cheapgpt` (Linux service) or check the terminal output.
+- Confirm the port: match the URL to your `--port` value.
+- Confirm network path: use the server's Tailscale IP or LAN IP from the client device.
 
 ## Anywhere Access with Tailscale
 

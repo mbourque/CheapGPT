@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CheapGPT</title>
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem("cheapgpt_theme") === "dark") {
+            document.documentElement.setAttribute("data-theme", "dark");
+          } else {
+            document.documentElement.removeAttribute("data-theme");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="css/chatgpt.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <!-- Mobile sidebar overlay -->
+      <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+
+      <aside class="sidebar" id="sidebar" aria-label="Chat history">
+        <div class="sidebar-rail" aria-label="Quick actions">
+          <button type="button" class="btn-rail-icon" id="btnRailToggle" aria-label="Expand sidebar" title="Expand sidebar">
+            <span class="icon-sidebar-panel"></span>
+          </button>
+          <button type="button" class="btn-rail-icon" id="btnRailNewChat" aria-label="New chat" title="New chat">
+            <span class="icon-rail-new-chat"></span>
+          </button>
+          <button type="button" class="btn-rail-icon" id="btnRailRecents" aria-label="Recents" title="Recents">
+            <span class="icon-rail-recents"></span>
+          </button>
+        </div>
+
+        <div class="sidebar-top">
+          <button type="button" class="btn-new-chat" id="btnNewChat" title="New chat">
+            <span class="icon-new-chat" aria-hidden="true"></span>
+            <span class="btn-new-chat-label">New chat</span>
+          </button>
+          <button
+            type="button"
+            class="btn-icon-only btn-sidebar-toggle"
+            id="btnSidebarToggle"
+            aria-label="Toggle sidebar"
+          >
+            <span class="icon-sidebar-panel"></span>
+          </button>
+        </div>
+
+        <div class="sidebar-scroll">
+          <div class="sidebar-section-label">Chats</div>
+          <nav class="chat-list" id="chatList" role="list"></nav>
+          <div class="sidebar-archived-block" id="archivedSection">
+            <div class="sidebar-section-label">Archived</div>
+            <nav class="chat-list" id="archivedChatList" role="list"></nav>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="theme-switcher" role="group" aria-label="Appearance">
+            <span class="theme-switcher-label">Theme</span>
+            <div class="theme-segments" id="themeSegments">
+              <button type="button" class="theme-seg" id="themeDark" data-theme-choice="dark" aria-pressed="false">
+                <span class="icon-theme-moon" aria-hidden="true"></span>
+                Dark
+              </button>
+              <button type="button" class="theme-seg" id="themeLight" data-theme-choice="light" aria-pressed="true">
+                <span class="icon-theme-sun" aria-hidden="true"></span>
+                Light
+              </button>
+            </div>
+          </div>
+          <button type="button" class="btn-sidebar-footer" id="btnSettings" disabled title="Coming soon">
+            <span class="icon-gear"></span>
+            Settings
+          </button>
+        </div>
+      </aside>
+
+      <div class="main-wrap">
+        <header class="top-bar">
+          <button
+            type="button"
+            class="btn-icon-only btn-sidebar-open"
+            id="btnSidebarOpen"
+            aria-label="Open sidebar"
+          >
+            <span class="icon-sidebar-panel"></span>
+          </button>
+          <div class="top-bar-title">
+            <div class="model-picker" id="modelPicker">
+              <button
+                type="button"
+                class="model-picker-btn"
+                id="modelPickerBtn"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-controls="modelPickerMenu"
+                disabled
+              >
+                <span class="model-picker-label" id="modelPickerLabel">Loading models…</span>
+                <span class="icon-model-chevron" aria-hidden="true"></span>
+              </button>
+              <div class="model-picker-menu" id="modelPickerMenu" role="listbox" aria-label="Models" hidden></div>
+            </div>
+          </div>
+          <div class="top-bar-actions">
+            <div class="chat-menu" id="chatMenu">
+              <button
+                type="button"
+                class="btn-icon-only"
+                id="btnChatMenu"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-controls="chatMenuPanel"
+                aria-label="Chat options"
+              >
+                <span class="icon-ellipsis"></span>
+              </button>
+              <div class="chat-menu-panel" id="chatMenuPanel" role="menu" hidden>
+                <button
+                  type="button"
+                  class="chat-menu-item"
+                  id="menuShare"
+                  role="menuitem"
+                  title="Preview and copy this conversation"
+                  aria-label="Share conversation"
+                >
+                  <span class="chat-menu-item-icon icon-share"></span>
+                  <span class="chat-menu-item-label">Share</span>
+                </button>
+                <button type="button" class="chat-menu-item" id="menuPinChat" role="menuitem">
+                  <span class="chat-menu-item-icon icon-pin"></span>
+                  <span class="chat-menu-item-label">Pin chat</span>
+                </button>
+                <button type="button" class="chat-menu-item" id="menuArchiveChat" role="menuitem">
+                  <span class="chat-menu-item-icon icon-archive"></span>
+                  <span class="chat-menu-item-label">Archive chat</span>
+                </button>
+                <button type="button" class="chat-menu-item chat-menu-item-danger" id="menuDeleteChat" role="menuitem">
+                  <span class="chat-menu-item-icon icon-trash"></span>
+                  <span class="chat-menu-item-label">Delete chat</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main class="thread" id="thread" aria-live="polite">
+          <div class="empty-state" id="emptyState">
+            <h1 class="empty-state-title">What can I help with?</h1>
+            <div class="suggestion-grid" id="suggestionGrid" role="group" aria-label="Suggestions"></div>
+          </div>
+          <div class="messages" id="messages" hidden></div>
+        </main>
+
+        <div class="composer-wrap">
+          <div class="composer-inner">
+            <form class="composer" id="composerForm" autocomplete="off">
+              <div class="composer-field">
+                <textarea
+                  id="messageInput"
+                  class="composer-input"
+                  rows="1"
+                  placeholder="Message CheapGPT…"
+                  maxlength="32000"
+                ></textarea>
+                <div class="composer-toolbar">
+                  <button type="button" class="btn-icon-only btn-attach" disabled title="Attachments (later)" aria-label="Attach file">
+                    <span class="icon-paperclip"></span>
+                  </button>
+                  <button type="button" class="btn-stop" id="btnStop" aria-label="Stop generating" title="Stop generating" hidden>
+                    <span class="icon-stop"></span>
+                  </button>
+                  <button type="submit" class="btn-send" id="btnSend" aria-label="Send message" disabled>
+                    <span class="icon-send"></span>
+                  </button>
+                </div>
+              </div>
+              <p class="composer-hint">CheapGPT can make mistakes. Check important info.</p>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="share-modal-root" id="shareModalRoot" aria-hidden="true">
+        <div class="share-modal-backdrop" id="shareModalBackdrop" aria-hidden="true"></div>
+        <div
+          class="share-modal"
+          id="shareModal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="shareModalTitle"
+          tabindex="-1"
+        >
+          <div class="share-modal-inner">
+            <header class="share-modal-header">
+              <h2 class="share-modal-title" id="shareModalTitle">Share</h2>
+              <button type="button" class="share-modal-close" id="shareModalClose" aria-label="Close">
+                <span class="share-modal-close-icon" aria-hidden="true"></span>
+              </button>
+            </header>
+            <div class="share-modal-body">
+              <div class="share-modal-preview-card" id="shareModalPreview" aria-label="Conversation preview"></div>
+            </div>
+            <footer class="share-modal-footer">
+              <div class="share-modal-actions" role="group" aria-label="Copy conversation">
+                <button type="button" class="share-modal-action" id="shareBtnCopyThread">
+                  <span class="share-modal-action-circle" aria-hidden="true">
+                    <span class="share-modal-action-icon icon-share-copy-w"></span>
+                  </span>
+                  <span class="share-modal-action-label">Copy conversation</span>
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="js/chat.js"></script>
+  </body>
+</html>

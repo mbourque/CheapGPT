@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -17,6 +18,8 @@ from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
+
+load_dotenv(ROOT / ".env")
 
 OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 DEFAULT_MODEL = os.environ.get("CHEAPGPT_MODEL", "llama3.2")

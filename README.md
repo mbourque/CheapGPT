@@ -22,9 +22,19 @@ CheapGPT is a lightweight ChatGPT-style web UI served by FastAPI, with chat resp
 
 From the project root:
 
+Windows (PowerShell):
+
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Linux/macOS (bash):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -38,6 +48,14 @@ CheapGPT reads these environment variables:
 ### Recommended: `.env` file (not committed)
 
 1. Copy the sample file:
+
+Windows (PowerShell):
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Linux/macOS (bash):
 
 ```bash
 cp .env.example .env
@@ -63,6 +81,18 @@ $env:CHEAPGPT_MODEL = "llama3.2"
 
 If you want to load `.env` in shell before starting:
 
+Windows (PowerShell):
+
+```powershell
+Get-Content .env | ForEach-Object {
+  if ($_ -match '^\s*#' -or $_ -match '^\s*$') { return }
+  $name, $value = $_ -split '=', 2
+  [System.Environment]::SetEnvironmentVariable($name, $value, "Process")
+}
+```
+
+Linux/macOS (bash):
+
 ```bash
 set -a
 source .env
@@ -71,8 +101,17 @@ set +a
 
 ## Run (Development)
 
+Windows (PowerShell):
+
 ```powershell
 .venv\Scripts\Activate.ps1
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Linux/macOS (bash):
+
+```bash
+source .venv/bin/activate
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -80,8 +119,17 @@ Then open: [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ## Run (Production-style, foreground)
 
+Windows (PowerShell):
+
 ```powershell
 .venv\Scripts\Activate.ps1
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Linux/macOS (bash):
+
+```bash
+source .venv/bin/activate
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -97,7 +145,7 @@ After the server starts, open one of these URLs:
 
 Quick checks if it does not open:
 
-- Confirm service is running: `systemctl status cheapgpt` (Linux service) or check the terminal output.
+- Confirm service is running: `systemctl status cheapgpt` (Linux) or `nssm status CheapGPT` (Windows), or check terminal output.
 - Confirm the port: match the URL to your `--port` value.
 - Confirm network path: use the server's Tailscale IP or LAN IP from the client device.
 
@@ -108,6 +156,16 @@ Use Tailscale to reach CheapGPT securely from your other devices without opening
 ### Option A: Private access on your Tailnet (recommended)
 
 1. Install and sign in to Tailscale on the CheapGPT host:
+
+Windows (PowerShell):
+
+```powershell
+winget install Tailscale.Tailscale
+tailscale up
+tailscale ip -4
+```
+
+Linux (bash):
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
@@ -136,6 +194,14 @@ Example:
 
 If you want internet-accessible HTTPS without exposing your home IP directly:
 
+Windows (PowerShell):
+
+```powershell
+tailscale funnel 8000
+```
+
+Linux (bash):
+
 ```bash
 sudo tailscale funnel 8000
 ```
@@ -143,6 +209,14 @@ sudo tailscale funnel 8000
 Tailscale will print an HTTPS URL (for example `https://your-node-name.ts.net`). Open that URL from anywhere.
 
 To stop Funnel:
+
+Windows (PowerShell):
+
+```powershell
+tailscale funnel reset
+```
+
+Linux (bash):
 
 ```bash
 sudo tailscale funnel reset
@@ -250,7 +324,7 @@ journalctl -u cheapgpt -f
 
 ## Troubleshooting
 
-- `**Cannot reach Ollama**`
+- **Cannot reach Ollama**
   - Verify Ollama is running: `ollama list`
   - Check `OLLAMA_HOST` points to the correct host/port
 - **No models shown**

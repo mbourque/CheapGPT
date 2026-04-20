@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
 
-OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://michael-desktop:11434").rstrip("/")
+OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 DEFAULT_MODEL = os.environ.get("CHEAPGPT_MODEL", "llama3.2")
 
 

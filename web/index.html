@@ -37,7 +37,7 @@
 
         <div class="sidebar-top">
           <button type="button" class="btn-new-chat" id="btnNewChat" title="New chat">
-            <span class="icon-new-chat" aria-hidden="true"></span>
+            <span class="icon-top-new-chat" aria-hidden="true"></span>
             <span class="btn-new-chat-label">New chat</span>
           </button>
           <button
@@ -117,6 +117,16 @@
             >
               <span class="icon-top-new-chat"></span>
             </button>
+            <button
+              type="button"
+              class="btn-icon-only btn-temporary-chat"
+              id="btnTemporaryChat"
+              aria-label="Temporary chat mode"
+              aria-pressed="false"
+              title="Temporary chat mode"
+            >
+              <span class="icon-temporary-chat"></span>
+            </button>
             <div class="chat-menu" id="chatMenu">
               <button
                 type="button"
@@ -159,6 +169,12 @@
         </header>
 
         <main class="thread" id="thread" aria-live="polite">
+          <div class="temporary-chat-notice" id="temporaryChatNotice" hidden>
+            <h2 class="temporary-chat-notice-title">Temporary Chat</h2>
+            <p class="temporary-chat-notice-text">
+              This chat won’t appear in your chat history.
+            </p>
+          </div>
           <div class="empty-state" id="emptyState">
             <h1 class="empty-state-title">What can I help with?</h1>
             <div class="suggestion-grid" id="suggestionGrid" role="group" aria-label="Suggestions"></div>
@@ -168,13 +184,23 @@
 
         <div class="composer-wrap">
           <div class="composer-inner">
+            <button
+              type="button"
+              class="btn-scroll-bottom"
+              id="btnScrollBottom"
+              aria-label="Scroll to latest message"
+              title="Jump to latest"
+              hidden
+            >
+              <span class="icon-scroll-bottom" aria-hidden="true"></span>
+            </button>
             <form class="composer" id="composerForm" autocomplete="off">
               <div class="composer-field">
                 <textarea
                   id="messageInput"
                   class="composer-input"
                   rows="1"
-                  placeholder="Message CheapGPT…"
+                  placeholder="Ask CheapGPT"
                   maxlength="32000"
                 ></textarea>
                 <div class="composer-toolbar">

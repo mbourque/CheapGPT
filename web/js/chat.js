@@ -8,6 +8,7 @@
   const THEME_KEY = "cheapgpt_theme";
   const MODEL_KEY = "cheapgpt_model";
   const THINKING_KEY = "cheapgpt_thinking_mode";
+  const TEMP_CHAT_KEY = "cheapgpt_temporary_chat_mode";
   const SIDEBAR_KEY = "cheapgpt_sidebar_hidden";
 
   const suggestions = [
@@ -32,6 +33,8 @@
     emptyState: document.getElementById("emptyState"),
     messages: document.getElementById("messages"),
     thread: document.getElementById("thread"),
+    btnScrollBottom: document.getElementById("btnScrollBottom"),
+    temporaryChatNotice: document.getElementById("temporaryChatNotice"),
     suggestionGrid: document.getElementById("suggestionGrid"),
     composerForm: document.getElementById("composerForm"),
     messageInput: document.getElementById("messageInput"),
@@ -42,6 +45,7 @@
     modelPickerBtn: document.getElementById("modelPickerBtn"),
     modelPickerMenu: document.getElementById("modelPickerMenu"),
     modelPickerLabel: document.getElementById("modelPickerLabel"),
+    btnTemporaryChat: document.getElementById("btnTemporaryChat"),
     chatMenu: document.getElementById("chatMenu"),
     btnChatMenu: document.getElementById("btnChatMenu"),
     chatMenuPanel: document.getElementById("chatMenuPanel"),
@@ -71,6 +75,9 @@
   let selectedModel = "";
   let modelMenuOpen = false;
   let thinkingMode = false;
+  let temporaryChatMode = false;
+  let temporaryChat = null;
+  let autoScrollLockedToBottom = true;
   let chatMenuOpen = false;
   /** @type {(typeof chats)[0] | null} */
   let shareModalChat = null;
@@ -105,6 +112,7 @@
   }
 
   function save() {
+    if (temporaryChatMode) return;
     // Keep history clean: drop non-active chats that have no messages.
     chats = chats.filter((c) => c.id === activeId || (Array.isArray(c.messages) && c.messages.length > 0));
     try {
@@ -114,7 +122,15 @@
     }
   }
 
+  function ensureTemporaryChat() {
+    if (!temporaryChat) {
+      temporaryChat = { id: "temporary", title: "Temporary chat", messages: [] };
+    }
+    return temporaryChat;
+  }
+
   function activeChat() {
+    if (temporaryChatMode) return ensureTemporaryChat();
     return chats.find((c) => c.id === activeId) || null;
   }
 
@@ -165,8 +181,18 @@
   function updateEmptyState() {
     const chat = activeChat();
     const empty = !chat || chat.messages.length === 0;
-    els.emptyState.hidden = !empty;
+    const hasDraftPrompt = !!(els.messageInput && els.messageInput.value.trim().length > 0);
+    const showTemporaryNotice = temporaryChatMode && empty;
+    els.emptyState.hidden = !empty || showTemporaryNotice;
     els.messages.hidden = empty;
+    if (els.suggestionGrid) {
+      // Show built-in prompt cards only for a fresh chat with no typed draft.
+      els.suggestionGrid.hidden = !empty || hasDraftPrompt || temporaryChatMode;
+    }
+    if (els.temporaryChatNotice) {
+      els.temporaryChatNotice.hidden = !showTemporaryNotice;
+    }
+    updateScrollBottomButton();
   }
 
   let markedCodeBlocksConfigured = false;
@@ -468,23 +494,48 @@
     await sendMessage(prompt, { regenerate: true });
   }
 
-  function scrollThreadToBottom() {
+  function isThreadNearBottom() {
+    if (!els.thread) return true;
+    return els.thread.scrollHeight - els.thread.scrollTop - els.thread.clientHeight < 80;
+  }
+
+  function updateScrollBottomButton() {
+    if (!els.btnScrollBottom || !els.thread) return;
+    const chat = activeChat();
+    const hasMessages = !!(chat && Array.isArray(chat.messages) && chat.messages.length > 0);
+    const show = hasMessages && !isThreadNearBottom();
+    els.btnScrollBottom.hidden = !show;
+  }
+
+  function scrollThreadToBottom(force = false) {
     requestAnimationFrame(() => {
+      if (!force && !autoScrollLockedToBottom) {
+        updateScrollBottomButton();
+        return;
+      }
       els.thread.scrollTop = els.thread.scrollHeight;
+      updateScrollBottomButton();
     });
   }
 
   function renderMessages() {
     els.messages.innerHTML = "";
     const chat = activeChat();
-    if (!chat) return;
+    if (!chat) {
+      updateScrollBottomButton();
+      return;
+    }
     chat.messages.forEach((m, i) => {
       appendMessage(m.role, m.content, { messageIndex: i });
     });
-    scrollThreadToBottom();
+    autoScrollLockedToBottom = true;
+    scrollThreadToBottom(true);
   }
 
   function selectChat(id) {
+    if (temporaryChatMode) {
+      setTemporaryChatMode(false);
+    }
     closeChatMenu();
     closeModelMenu();
     closeShareModal();
@@ -543,6 +594,14 @@
     closeChatMenu();
     closeModelMenu();
     closeShareModal();
+    if (temporaryChatMode) {
+      temporaryChat = { id: "temporary", title: "Temporary chat", messages: [] };
+      renderMessages();
+      updateEmptyState();
+      closeSidebarMobile();
+      els.messageInput.focus();
+      return;
+    }
     const existing = activeChat();
     if (existing && Array.isArray(existing.messages) && existing.messages.length === 0) {
       // Reuse current empty draft chat instead of creating history clutter.
@@ -562,6 +621,7 @@
   }
 
   function ensureTitleFromFirstMessage(text) {
+    if (temporaryChatMode) return;
     const chat = activeChat();
     if (!chat || chat.messages.length > 1) return;
     chat.title = truncateTitle(text, 40);
@@ -622,6 +682,32 @@
     toastHideTimer = window.setTimeout(() => {
       el.classList.remove("is-visible");
     }, 2600);
+  }
+
+  function setTemporaryChatMode(enabled, { persist } = { persist: true }) {
+    temporaryChatMode = !!enabled;
+    if (temporaryChatMode) {
+      ensureTemporaryChat();
+    }
+    if (els.btnTemporaryChat) {
+      els.btnTemporaryChat.classList.toggle("is-active", temporaryChatMode);
+      els.btnTemporaryChat.setAttribute("aria-pressed", temporaryChatMode ? "true" : "false");
+      els.btnTemporaryChat.title = temporaryChatMode ? "Temporary chat mode: on" : "Temporary chat mode";
+    }
+    if (persist) {
+      try {
+        localStorage.setItem(TEMP_CHAT_KEY, temporaryChatMode ? "1" : "0");
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    if (els.messageInput) {
+      els.messageInput.placeholder = temporaryChatMode ? "Temporary chat" : "Ask CheapGPT";
+    }
+    renderMessages();
+    renderChatList();
+    updateChatMenuState();
+    updateEmptyState();
   }
 
   function renderSharePreview(chat) {
@@ -719,7 +805,7 @@
 
   function updateChatMenuState() {
     const chat = activeChat();
-    const hasChat = !!chat;
+    const hasChat = !!chat && !temporaryChatMode;
     if (els.menuShare) {
       els.menuShare.disabled = !hasChat;
     }
@@ -776,6 +862,7 @@
   }
 
   function pinOrUnpinChat() {
+    if (temporaryChatMode) return;
     const chat = activeChat();
     if (!chat) return;
     chat.pinned = !chat.pinned;
@@ -785,6 +872,7 @@
   }
 
   function archiveOrUnarchiveChat() {
+    if (temporaryChatMode) return;
     const chat = activeChat();
     if (!chat) return;
     chat.archived = !chat.archived;
@@ -806,6 +894,7 @@
   }
 
   function deleteActiveChat() {
+    if (temporaryChatMode) return;
     const chat = activeChat();
     if (!chat) return;
     const ok = window.confirm("Delete this chat?");
@@ -1329,6 +1418,11 @@
   if (els.btnTopNewChat) {
     els.btnTopNewChat.addEventListener("click", newChat);
   }
+  if (els.btnTemporaryChat) {
+    els.btnTemporaryChat.addEventListener("click", () => {
+      setTemporaryChatMode(!temporaryChatMode);
+    });
+  }
   if (els.btnRailRecents) {
     els.btnRailRecents.addEventListener("click", () => {
       if (isMobileView()) {
@@ -1341,6 +1435,12 @@
           /* ignore */
         }
       }
+    });
+  }
+  if (els.btnScrollBottom) {
+    els.btnScrollBottom.addEventListener("click", () => {
+      autoScrollLockedToBottom = true;
+      scrollThreadToBottom(true);
     });
   }
   els.sidebarBackdrop.addEventListener("click", closeSidebarMobile);
@@ -1380,16 +1480,33 @@
   els.messageInput.addEventListener("input", () => {
     autosize();
     updateSendState();
+    updateEmptyState();
   });
 
   els.messageInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       if (!els.btnSend.disabled) els.composerForm.requestSubmit();
     }
   });
+  if (els.thread) {
+    els.thread.addEventListener(
+      "scroll",
+      () => {
+        autoScrollLockedToBottom = isThreadNearBottom();
+        updateScrollBottomButton();
+      },
+      { passive: true }
+    );
+  }
 
   updateSendState();
+  updateScrollBottomButton();
+  try {
+    setTemporaryChatMode(localStorage.getItem(TEMP_CHAT_KEY) === "1", { persist: false });
+  } catch (e) {
+    setTemporaryChatMode(false, { persist: false });
+  }
   if (els.btnStop) {
     els.btnStop.hidden = true;
     els.btnStop.disabled = true;

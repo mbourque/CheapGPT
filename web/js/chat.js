@@ -808,22 +808,26 @@
 
   function updateChatMenuState() {
     const chat = activeChat();
-    const hasChat = !!chat && !temporaryChatMode;
+    const hasAssistantResponse =
+      !!chat &&
+      !temporaryChatMode &&
+      Array.isArray(chat.messages) &&
+      chat.messages.some((m) => m && m.role === "assistant" && typeof m.content === "string" && m.content.trim().length > 0);
     if (els.menuShare) {
-      els.menuShare.disabled = !hasChat;
+      els.menuShare.disabled = !hasAssistantResponse;
     }
     if (els.menuPinChat) {
-      els.menuPinChat.disabled = !hasChat;
+      els.menuPinChat.disabled = !hasAssistantResponse;
       const label = els.menuPinChat.querySelector(".chat-menu-item-label");
       if (label) label.textContent = chat && chat.pinned ? "Unpin chat" : "Pin chat";
     }
     if (els.menuArchiveChat) {
-      els.menuArchiveChat.disabled = !hasChat;
+      els.menuArchiveChat.disabled = !hasAssistantResponse;
       const label = els.menuArchiveChat.querySelector(".chat-menu-item-label");
       if (label) label.textContent = chat && chat.archived ? "Unarchive chat" : "Archive chat";
     }
     if (els.menuDeleteChat) {
-      els.menuDeleteChat.disabled = !hasChat;
+      els.menuDeleteChat.disabled = !hasAssistantResponse;
     }
   }
 

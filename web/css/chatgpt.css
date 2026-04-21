@@ -1382,6 +1382,11 @@ html[data-theme="dark"] .markdown-body tbody tr:nth-child(even) td {
   border: 1px solid var(--border-subtle);
 }
 
+.app.is-temporary-chat .composer-field {
+  background: #000;
+  border-color: #1f1f1f;
+}
+
 .composer-input {
   width: 100%;
   min-height: 52px;
@@ -1394,8 +1399,16 @@ html[data-theme="dark"] .markdown-body tbody tr:nth-child(even) td {
   line-height: 1.5;
 }
 
+.app.is-temporary-chat .composer-input {
+  color: #fff;
+}
+
 .composer-input::placeholder {
   color: var(--text-muted);
+}
+
+.app.is-temporary-chat .composer-input::placeholder {
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .composer-input:focus {

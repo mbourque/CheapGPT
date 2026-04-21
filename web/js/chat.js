@@ -689,6 +689,9 @@
     if (temporaryChatMode) {
       ensureTemporaryChat();
     }
+    if (els.app) {
+      els.app.classList.toggle("is-temporary-chat", temporaryChatMode);
+    }
     if (els.btnTemporaryChat) {
       els.btnTemporaryChat.classList.toggle("is-active", temporaryChatMode);
       els.btnTemporaryChat.setAttribute("aria-pressed", temporaryChatMode ? "true" : "false");

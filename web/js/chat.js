@@ -37,6 +37,7 @@
     messageInput: document.getElementById("messageInput"),
     btnStop: document.getElementById("btnStop"),
     btnSend: document.getElementById("btnSend"),
+    btnTopNewChat: document.getElementById("btnTopNewChat"),
     modelPicker: document.getElementById("modelPicker"),
     modelPickerBtn: document.getElementById("modelPickerBtn"),
     modelPickerMenu: document.getElementById("modelPickerMenu"),
@@ -586,7 +587,7 @@
 
   function updateModelPickerLabel() {
     if (!els.modelPickerLabel) return;
-    els.modelPickerLabel.textContent = "CheapGPT";
+    els.modelPickerLabel.innerHTML = '<span class="model-picker-label-brand">CheapGPT</span>';
   }
 
   function formatThreadForClipboard(chat) {
@@ -868,7 +869,13 @@
     modelLabel.textContent = "Models";
     els.modelPickerMenu.appendChild(modelLabel);
 
-    availableModels.forEach((model) => {
+    const orderedModels = availableModels.slice().sort((a, b) => {
+      if (a.name === selectedModel) return -1;
+      if (b.name === selectedModel) return 1;
+      return 0;
+    });
+
+    orderedModels.forEach((model) => {
       const name = model.name;
       const opt = document.createElement("button");
       opt.type = "button";
@@ -1318,6 +1325,9 @@
   }
   if (els.btnRailNewChat) {
     els.btnRailNewChat.addEventListener("click", newChat);
+  }
+  if (els.btnTopNewChat) {
+    els.btnTopNewChat.addEventListener("click", newChat);
   }
   if (els.btnRailRecents) {
     els.btnRailRecents.addEventListener("click", () => {

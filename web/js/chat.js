@@ -27,6 +27,7 @@
     btnRailNewChat: document.getElementById("btnRailNewChat"),
     btnRailRecents: document.getElementById("btnRailRecents"),
     btnNewChat: document.getElementById("btnNewChat"),
+    chatListLabel: document.getElementById("chatListLabel"),
     chatList: document.getElementById("chatList"),
     archivedSection: document.getElementById("archivedSection"),
     archivedChatList: document.getElementById("archivedChatList"),
@@ -158,6 +159,9 @@
       btn.addEventListener("click", () => selectChat(c.id));
       els.chatList.appendChild(btn);
     });
+    if (els.chatListLabel) {
+      els.chatListLabel.hidden = visibleChats.length === 0;
+    }
 
     const archived = chats.filter((c) => c.archived && Array.isArray(c.messages) && c.messages.length > 0);
     if (els.archivedChatList) {

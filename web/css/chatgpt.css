@@ -1411,6 +1411,21 @@ html[data-theme="dark"] .markdown-body tbody tr:nth-child(even) td {
   color: rgba(255, 255, 255, 0.72);
 }
 
+.app.is-temporary-chat .btn-attach {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-radius: 999px;
+  opacity: 1;
+}
+
+.app.is-temporary-chat .icon-paperclip {
+  opacity: 1;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4'%3E%3Cpath d='M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4'%3E%3Cpath d='M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
 .composer-input:focus {
   outline: none;
 }
@@ -1446,6 +1461,11 @@ html[data-theme="dark"] .markdown-body tbody tr:nth-child(even) td {
   transition: opacity 0.15s ease, transform 0.1s ease;
 }
 
+.app.is-temporary-chat .btn-send {
+  background: #fff;
+  color: #111;
+}
+
 .btn-stop {
   width: 36px;
   height: 36px;
@@ -1456,6 +1476,12 @@ html[data-theme="dark"] .markdown-body tbody tr:nth-child(even) td {
   background: var(--bg-hover);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
+}
+
+.app.is-temporary-chat .btn-stop {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .btn-stop:hover {
@@ -1483,6 +1509,12 @@ html[data-theme="dark"] .markdown-body tbody tr:nth-child(even) td {
 .btn-send:disabled {
   opacity: 0.35;
   background: var(--text-muted);
+}
+
+.app.is-temporary-chat .btn-send:disabled {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.35);
+  color: rgba(17, 17, 17, 0.8);
 }
 
 .icon-send {
@@ -1551,6 +1583,10 @@ html[data-theme="dark"] .markdown-body tbody tr:nth-child(even) td {
     flex: 0;
     padding: 0.625rem;
     justify-content: center;
+  }
+
+  .suggestion-grid {
+    display: none;
   }
 
   .msg-row-inner {

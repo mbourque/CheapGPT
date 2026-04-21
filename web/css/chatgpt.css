@@ -610,7 +610,7 @@ textarea {
 }
 
 .btn-icon-only.btn-top-new-chat {
-  display: none;
+  display: inline-flex;
 }
 
 .icon-top-new-chat {
@@ -1571,9 +1571,6 @@ html[data-theme="dark"] .markdown-body tbody tr:nth-child(even) td {
     display: inline-flex;
   }
 
-  .btn-icon-only.btn-top-new-chat {
-    display: inline-flex;
-  }
 
   .btn-new-chat-label {
     display: none;

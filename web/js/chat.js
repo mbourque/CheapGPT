@@ -595,13 +595,20 @@
   }
 
   function newChat() {
+    const resetComposerDraft = () => {
+      if (!els.messageInput) return;
+      els.messageInput.value = "";
+      autosize();
+      updateSendState();
+      updateEmptyState();
+    };
     closeChatMenu();
     closeModelMenu();
     closeShareModal();
     if (temporaryChatMode) {
       temporaryChat = { id: "temporary", title: "Temporary chat", messages: [] };
       renderMessages();
-      updateEmptyState();
+      resetComposerDraft();
       closeSidebarMobile();
       els.messageInput.focus();
       return;
@@ -609,6 +616,7 @@
     const existing = activeChat();
     if (existing && Array.isArray(existing.messages) && existing.messages.length === 0) {
       // Reuse current empty draft chat instead of creating history clutter.
+      resetComposerDraft();
       closeSidebarMobile();
       els.messageInput.focus();
       return;
@@ -619,7 +627,7 @@
     save();
     renderChatList();
     renderMessages();
-    updateEmptyState();
+    resetComposerDraft();
     closeSidebarMobile();
     els.messageInput.focus();
   }

@@ -6,7 +6,6 @@ Run from repo root: uvicorn main:app --reload --host 127.0.0.1 --port 8000
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import httpx
@@ -18,9 +17,9 @@ from pydantic import BaseModel, Field
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
 
-# Defaults only; Settings in the UI updates process memory (and os.environ) for this run.
-OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
-DEFAULT_MODEL = os.environ.get("CHEAPGPT_MODEL", "llama3.2")
+# Defaults only; Settings in the UI updates process memory for this run.
+OLLAMA_BASE = "http://127.0.0.1:11434"
+DEFAULT_MODEL = "llama3.2"
 
 
 def infer_thinking_capable(model_name: str, item: dict) -> bool:
@@ -164,8 +163,6 @@ async def update_settings(req: SettingsUpdate):
 
     OLLAMA_BASE = ollama_host
     DEFAULT_MODEL = model
-    os.environ["OLLAMA_HOST"] = ollama_host
-    os.environ["CHEAPGPT_MODEL"] = model
 
     return {
         "ok": True,

@@ -20,7 +20,19 @@ CheapGPT is a lightweight ChatGPT-style web UI served by FastAPI, with chat resp
 
 ## Install
 
+Clone to `/opt/CheapGPT`:
+
+```bash
+sudo mkdir -p /opt
+cd /opt
+sudo git clone https://github.com/<your-org-or-user>/CheapGPT.git CheapGPT
+sudo chown -R $USER:$USER /opt/CheapGPT
+cd /opt/CheapGPT
+```
+
 From the project root:
+
+For the service examples later in this guide, the app path is shown as `/opt/CheapGPT`. If you install it elsewhere, use your actual path consistently in service config (for example, `WorkingDirectory` and `ExecStart`).
 
 Windows (PowerShell):
 
@@ -189,11 +201,6 @@ In the NSSM dialog set:
 - **Startup directory**: `C:\dev\CheapGPT`
 - **Arguments**: `-m uvicorn main:app --host 127.0.0.1 --port 8000`
 
-Set environment variables in NSSM (AppEnvironmentExtra), for example:
-
-- `OLLAMA_HOST=http://127.0.0.1:11434`
-- `CHEAPGPT_MODEL=llama3.2`
-
 Then start:
 
 ```powershell
@@ -221,8 +228,6 @@ Wants=network-online.target
 Type=simple
 User=YOUR_USER
 WorkingDirectory=/opt/CheapGPT
-Environment=OLLAMA_HOST=http://127.0.0.1:11434
-Environment=CHEAPGPT_MODEL=llama3.2
 ExecStart=/opt/CheapGPT/.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=3
@@ -264,10 +269,10 @@ journalctl -u cheapgpt -f
 ## Troubleshooting
 
 - **Settings lost after restarting uvicorn**
-  - In-memory settings from the UI are cleared on restart. Set `OLLAMA_HOST` / `CHEAPGPT_MODEL` in the environment (or systemd `Environment=` entries) if you want stable defaults at boot, then adjust further in **Settings** if needed.
+  - In-memory settings from the UI are cleared on restart. Open **Settings** and set Ollama host + model again after restart.
 - **Cannot reach Ollama**
   - Verify Ollama is running: `ollama list`
-  - Check `OLLAMA_HOST` points to the correct host/port
+  - In **Settings**, check Ollama Host URL points to the correct host/port
 - **No models shown**
   - Pull one first: `ollama pull llama3.2`
 - **Port already in use**

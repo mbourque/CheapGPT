@@ -472,10 +472,6 @@ textarea {
   font-weight: 600;
 }
 
-.settings-page-back {
-  transform: rotate(180deg);
-}
-
 .settings-form {
   display: flex;
   flex-direction: column;

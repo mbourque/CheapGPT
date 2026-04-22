@@ -40,7 +40,7 @@ pip install -r requirements.txt
 
 ## Configuration
 
-**In the web UI:** open **Settings** (sidebar) to set the Ollama host URL and default model. The server keeps those values in memory for this process.
+**In the web UI:** open **Settings** (sidebar), set the Ollama host URL, choose a model, then click **Apply**. The server keeps those values in memory for this process.
 
 Use `http://127.0.0.1:11434` for Ollama on the same machine, or a LAN/Tailscale URL if Ollama runs elsewhere.
 

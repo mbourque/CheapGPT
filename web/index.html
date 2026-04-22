@@ -73,7 +73,7 @@
               </button>
             </div>
           </div>
-          <button type="button" class="btn-sidebar-footer" id="btnSettings" disabled title="Coming soon">
+          <button type="button" class="btn-sidebar-footer" id="btnSettings" title="Settings">
             <span class="icon-gear"></span>
             Settings
           </button>
@@ -222,6 +222,51 @@
             </form>
           </div>
         </div>
+
+        <section class="settings-page" id="settingsPage" hidden aria-label="Settings">
+          <div class="settings-page-inner">
+            <header class="settings-page-header">
+              <h2 class="settings-page-title">Settings</h2>
+              <button type="button" class="btn-icon-only settings-page-back" id="btnSettingsBack" aria-label="Back to chat">
+                <span class="icon-sidebar-panel"></span>
+              </button>
+            </header>
+            <form class="settings-form" id="settingsForm" autocomplete="off">
+              <label class="settings-field">
+                <span class="settings-label">Ollama Host URL</span>
+                <input
+                  type="text"
+                  class="settings-input"
+                  id="settingsOllamaHost"
+                  name="ollamaHost"
+                  placeholder="http://127.0.0.1:11434"
+                />
+              </label>
+              <label class="settings-field">
+                <span class="settings-label">Model</span>
+                <select class="settings-input" id="settingsModel" name="model">
+                  <option value="">Select a model…</option>
+                </select>
+              </label>
+              <label class="settings-field">
+                <span class="settings-label">Custom Instructions</span>
+                <textarea
+                  class="settings-textarea"
+                  id="settingsCustomInstructions"
+                  placeholder="Coming soon"
+                  disabled
+                ></textarea>
+              </label>
+              <p class="settings-status" id="settingsStatus" hidden></p>
+              <div class="settings-actions">
+                <button type="button" class="settings-cancel" id="btnSettingsCancel">Cancel</button>
+                <button type="submit" class="btn-send settings-apply" id="btnSettingsApply">
+                  <span>Apply</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
       </div>
 
       <div class="share-modal-root" id="shareModalRoot" aria-hidden="true">

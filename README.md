@@ -40,64 +40,9 @@ pip install -r requirements.txt
 
 ## Configuration
 
-CheapGPT reads these environment variables:
+**In the web UI:** open **Settings** (sidebar) to set the Ollama host URL and default model. The server keeps those values in memory for this process.
 
-- `OLLAMA_HOST` (default: `http://127.0.0.1:11434`)
-- `CHEAPGPT_MODEL` (default: `llama3.2`)
-
-### Recommended: `.env` file (not committed)
-
-1. Copy the sample file:
-
-Windows (PowerShell):
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Linux/macOS (bash):
-
-```bash
-cp .env.example .env
-```
-
-1. Edit `.env` for your setup:
-
-```env
-OLLAMA_HOST=http://windows-ollama:11434
-CHEAPGPT_MODEL=llama3.2
-```
-
-Keep your actual settings in `.env`, and use `.env.example` as the starter template.
-
-Example (PowerShell, using Ollama on another computer):
-
-```powershell
-$env:OLLAMA_HOST = "http://windows-ollama:11434"
-$env:CHEAPGPT_MODEL = "llama3.2"
-```
-
-> Recommended: set `OLLAMA_HOST` explicitly for your setup. Use `http://127.0.0.1:11434` for same-machine Ollama, or a hostname like `http://windows-ollama:11434` for cross-machine access.
-
-If you want to load `.env` in shell before starting:
-
-Windows (PowerShell):
-
-```powershell
-Get-Content .env | ForEach-Object {
-  if ($_ -match '^\s*#' -or $_ -match '^\s*$') { return }
-  $name, $value = $_ -split '=', 2
-  [System.Environment]::SetEnvironmentVariable($name, $value, "Process")
-}
-```
-
-Linux/macOS (bash):
-
-```bash
-set -a
-source .env
-set +a
-```
+Use `http://127.0.0.1:11434` for Ollama on the same machine, or a LAN/Tailscale URL if Ollama runs elsewhere.
 
 ## Run (Development)
 
@@ -276,20 +221,14 @@ Wants=network-online.target
 Type=simple
 User=YOUR_USER
 WorkingDirectory=/opt/CheapGPT
-EnvironmentFile=/etc/cheapgpt.env
+Environment=OLLAMA_HOST=http://127.0.0.1:11434
+Environment=CHEAPGPT_MODEL=llama3.2
 ExecStart=/opt/CheapGPT/.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
-```
-
-Create `/etc/cheapgpt.env` (outside the repo), for example:
-
-```bash
-OLLAMA_HOST=http://127.0.0.1:11434
-CHEAPGPT_MODEL=llama3.2
 ```
 
 For Tailscale remote access, change `--host 127.0.0.1` to `--host 0.0.0.0`.
@@ -324,6 +263,8 @@ journalctl -u cheapgpt -f
 
 ## Troubleshooting
 
+- **Settings lost after restarting uvicorn**
+  - In-memory settings from the UI are cleared on restart. Set `OLLAMA_HOST` / `CHEAPGPT_MODEL` in the environment (or systemd `Environment=` entries) if you want stable defaults at boot, then adjust further in **Settings** if needed.
 - **Cannot reach Ollama**
   - Verify Ollama is running: `ollama list`
   - Check `OLLAMA_HOST` points to the correct host/port

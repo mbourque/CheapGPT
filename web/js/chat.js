@@ -11,6 +11,143 @@
   const TEMP_CHAT_KEY = "cheapgpt_temporary_chat_mode";
   const SIDEBAR_KEY = "cheapgpt_sidebar_hidden";
 
+  const PREF_COOKIE_MAX_AGE = 400 * 24 * 60 * 60;
+
+  function readPrefCookie(name) {
+    if (typeof document === "undefined" || !document.cookie) return null;
+    const prefix = name + "=";
+    const chunks = document.cookie.split(";");
+    for (let i = 0; i < chunks.length; i++) {
+      const part = chunks[i].replace(/^\s+/, "");
+      if (part.indexOf(prefix) !== 0) continue;
+      try {
+        return decodeURIComponent(part.slice(prefix.length));
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  function writePrefCookie(name, value) {
+    if (typeof document === "undefined") return;
+    let c =
+      name +
+      "=" +
+      encodeURIComponent(value) +
+      "; path=/; SameSite=Lax; max-age=" +
+      PREF_COOKIE_MAX_AGE;
+    if (typeof location !== "undefined" && location.protocol === "https:") {
+      c += "; Secure";
+    }
+    document.cookie = c;
+  }
+
+  /**
+   * Read a small preference. Tries localStorage, then sessionStorage, then cookie.
+   * Mobile Safari private mode often throws or blocks localStorage; cookie still works for same-site HTTP(S).
+   */
+  function getPreference(key) {
+    try {
+      if (window.localStorage) {
+        const v = localStorage.getItem(key);
+        if (v != null) return v;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    try {
+      if (window.sessionStorage) {
+        const v = sessionStorage.getItem(key);
+        if (v != null) return v;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return readPrefCookie(key);
+  }
+
+  function setPreference(key, value) {
+    let ok = false;
+    try {
+      if (window.localStorage) {
+        localStorage.setItem(key, value);
+        ok = true;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    if (ok) return;
+    try {
+      if (window.sessionStorage) {
+        sessionStorage.setItem(key, value);
+        ok = true;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    if (ok) return;
+    writePrefCookie(key, value);
+  }
+
+  /**
+   * One resolution path for both the header picker and Settings.
+   *
+   * Browser preference (localStorage / session / cookie) wins over server defaults from this session.
+   * Use CHEAPGPT_MODEL from the server only when there is no stored choice that matches the
+   * current Ollama tag list.
+   *
+   * Order: one-shot prefer (e.g. after Apply) → stored → server → default_model → first tag.
+   */
+  function pickResolvedModelName(modelNames, opts) {
+    const prefer = (opts && opts.prefer ? String(opts.prefer) : "").trim();
+    const stored = (opts && opts.stored != null ? String(opts.stored) : "").trim();
+    const serverModel = (opts && opts.serverModel ? String(opts.serverModel) : "").trim();
+    const defaultModel = (opts && opts.defaultModel ? String(opts.defaultModel) : "").trim();
+    const list = Array.isArray(modelNames)
+      ? modelNames.map((n) => String(n || "").trim()).filter(Boolean)
+      : [];
+    const inList = function (n) {
+      const t = (n || "").trim();
+      return t && list.indexOf(t) !== -1;
+    };
+    if (prefer && inList(prefer)) return prefer;
+    if (stored && inList(stored)) return stored;
+    if (serverModel && inList(serverModel)) return serverModel;
+    if (defaultModel && inList(defaultModel)) return defaultModel;
+    return list[0] ? list[0] : "";
+  }
+
+  function apiFetch(url, init) {
+    const o = init || {};
+    return fetch(url, {
+      credentials: "same-origin",
+      cache: "no-store",
+      ...o,
+    });
+  }
+
+  /** WebKit / mobile Safari often ignores select.value until options are committed; set selectedIndex too. */
+  function setNativeSelectValue(select, value) {
+    if (!select || value == null || value === "") return;
+    const v = String(value);
+    let idx = -1;
+    for (let i = 0; i < select.options.length; i++) {
+      if (select.options[i].value === v) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx >= 0) {
+      select.selectedIndex = idx;
+    }
+    try {
+      select.value = v;
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
   const suggestions = [
     { title: "Explain a concept", text: "Explain how attention works in transformers in simple terms." },
     { title: "Draft an email", text: "Draft a short professional email postponing a meeting by one day." },
@@ -63,6 +200,15 @@
     menuDeleteChat: document.getElementById("menuDeleteChat"),
     themeDark: document.getElementById("themeDark"),
     themeLight: document.getElementById("themeLight"),
+    btnSettings: document.getElementById("btnSettings"),
+    settingsPage: document.getElementById("settingsPage"),
+    btnSettingsBack: document.getElementById("btnSettingsBack"),
+    settingsForm: document.getElementById("settingsForm"),
+    settingsOllamaHost: document.getElementById("settingsOllamaHost"),
+    settingsModel: document.getElementById("settingsModel"),
+    settingsStatus: document.getElementById("settingsStatus"),
+    btnSettingsApply: document.getElementById("btnSettingsApply"),
+    btnSettingsCancel: document.getElementById("btnSettingsCancel"),
     app: document.getElementById("app"),
   };
 
@@ -76,8 +222,11 @@
   let selectedModel = "";
   let modelMenuOpen = false;
   let thinkingMode = false;
+  let requiresSettingsFix = false;
   let temporaryChatMode = false;
   let temporaryChat = null;
+  let settingsLoadedHost = "";
+  let settingsHasError = false;
   let autoScrollLockedToBottom = true;
   let chatMenuOpen = false;
   /** @type {(typeof chats)[0] | null} */
@@ -264,19 +413,10 @@
     const inner = document.createElement("div");
     inner.className = "msg-row-inner";
 
-    const av = document.createElement("div");
-    av.className = "msg-avatar";
-    av.textContent = role === "user" ? "You" : "AI";
-    av.setAttribute("aria-hidden", "true");
-
     const body = document.createElement("div");
     body.className = "msg-body msg-body--" + role;
 
-    let avatarMount = av;
     if (role === "assistant") {
-      const avCol = document.createElement("div");
-      avCol.className = "msg-avatar-col";
-      avCol.appendChild(av);
       if (streaming) {
         const thinking = document.createElement("div");
         thinking.className = "msg-thinking-dots";
@@ -288,12 +428,8 @@
           dot.setAttribute("aria-hidden", "true");
           thinking.appendChild(dot);
         }
-        avCol.appendChild(thinking);
+        body.appendChild(thinking);
       }
-      avatarMount = avCol;
-    }
-
-    if (role === "assistant") {
       const md = document.createElement("div");
       md.className = "markdown-body";
       if (streaming) {
@@ -306,7 +442,10 @@
         body.appendChild(createAssistantActions(content, messageIndex));
       }
     } else {
-      body.textContent = content;
+      const bubble = document.createElement("div");
+      bubble.className = "msg-user-bubble";
+      bubble.textContent = content;
+      body.appendChild(bubble);
       if (canEditUserMessage(messageIndex)) {
         const tools = document.createElement("div");
         tools.className = "msg-user-tools";
@@ -321,7 +460,6 @@
       }
     }
 
-    inner.appendChild(avatarMount);
     inner.appendChild(body);
     row.appendChild(inner);
     els.messages.appendChild(row);
@@ -562,8 +700,17 @@
     els.sidebarBackdrop.classList.remove("is-open");
   }
 
+  /** Match drawer `max-width` in web/css/chatgpt.css (drawer + settings). */
+  const MOBILE_MAX_WIDTH_PX = 768;
+
   function isMobileView() {
-    return window.matchMedia("(max-width: 768px)").matches;
+    if (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(max-width: " + MOBILE_MAX_WIDTH_PX + "px)").matches
+    ) {
+      return true;
+    }
+    return window.innerWidth <= MOBILE_MAX_WIDTH_PX;
   }
 
   function applySidebarDesktopState(hidden) {
@@ -694,6 +841,239 @@
     toastHideTimer = window.setTimeout(() => {
       el.classList.remove("is-visible");
     }, 2600);
+  }
+
+  function setSettingsStatus(message, isError) {
+    if (!els.settingsStatus) return;
+    settingsHasError = !!isError && !!message;
+    if (!message) {
+      els.settingsStatus.hidden = true;
+      els.settingsStatus.textContent = "";
+      els.settingsStatus.classList.remove("is-error");
+      updateSettingsApplyState();
+      return;
+    }
+    els.settingsStatus.hidden = false;
+    els.settingsStatus.textContent = message;
+    els.settingsStatus.classList.toggle("is-error", !!isError);
+    updateSettingsApplyState();
+  }
+
+  function updateSettingsApplyState() {
+    if (!els.btnSettingsApply) return;
+    const host = (els.settingsOllamaHost && els.settingsOllamaHost.value.trim()) || "";
+    const model = (els.settingsModel && els.settingsModel.value) || "";
+    const modelDisabled = !!(els.settingsModel && els.settingsModel.disabled);
+    els.btnSettingsApply.disabled = !host || !model || modelDisabled || settingsHasError;
+  }
+
+  function setSettingsModelDisabled(disabled, placeholderText) {
+    if (!els.settingsModel) return;
+    els.settingsModel.disabled = !!disabled;
+    if (disabled) {
+      els.settingsModel.innerHTML = "";
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = placeholderText || "Model list unavailable";
+      els.settingsModel.appendChild(opt);
+      els.settingsModel.value = "";
+    }
+    updateSettingsApplyState();
+  }
+
+  function closeSettingsPage() {
+    if (requiresSettingsFix) {
+      setSettingsStatus("Connect Ollama and choose a valid model before returning to chat.", true);
+      if (els.settingsPage) els.settingsPage.hidden = false;
+      if (els.app) els.app.classList.add("settings-open");
+      return;
+    }
+    if (!els.app) return;
+    closeSidebarMobile();
+    els.app.classList.remove("settings-open");
+    if (els.settingsPage) els.settingsPage.hidden = true;
+    settingsHasError = false;
+    setSettingsStatus("", false);
+    if (els.messageInput) {
+      try {
+        els.messageInput.focus({ preventScroll: true });
+      } catch (e) {
+        try {
+          els.messageInput.focus();
+        } catch (e2) {
+          /* ignore */
+        }
+      }
+    }
+  }
+
+  function populateSettingsModelOptions(models, selected) {
+    if (!els.settingsModel) return;
+    const select = els.settingsModel;
+    select.disabled = false;
+    select.innerHTML = "";
+    const unique = [];
+    const seen = new Set();
+    (models || []).forEach((name) => {
+      const n = String(name || "").trim();
+      if (!n || seen.has(n)) return;
+      seen.add(n);
+      unique.push(n);
+    });
+    const ordered = unique.slice();
+    if (selected && ordered.includes(selected)) {
+      ordered.splice(ordered.indexOf(selected), 1);
+      ordered.unshift(selected);
+    } else if (selected) {
+      ordered.unshift(selected);
+    }
+    if (ordered.length === 0) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No models found";
+      select.appendChild(opt);
+      select.value = "";
+      select.disabled = true;
+      updateSettingsApplyState();
+      return;
+    }
+    ordered.forEach((name, idx) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = idx === 0 && name === selected ? name + " (current)" : name;
+      select.appendChild(opt);
+    });
+    const valueToSet = selected || ordered[0];
+    setNativeSelectValue(select, valueToSet);
+    requestAnimationFrame(function () {
+      setNativeSelectValue(select, valueToSet);
+    });
+    updateSettingsApplyState();
+  }
+
+  async function loadSettingsModelsForHost(ollamaHost, selectedModel) {
+    const host = (ollamaHost || "").trim();
+    if (!host) {
+      populateSettingsModelOptions([], "");
+      return;
+    }
+    let res = await apiFetch("/api/settings/models?ollama_host=" + encodeURIComponent(host));
+    if (res.status === 404) {
+      const normalizedInput = host.replace(/\/+$/, "");
+      const normalizedLoaded = (settingsLoadedHost || "").replace(/\/+$/, "");
+      if (normalizedInput === normalizedLoaded) {
+        // Older backend: only safe fallback for the current configured host.
+        res = await apiFetch("/api/models");
+      } else {
+        throw new Error("This server needs a restart before host-based model validation can be used.");
+      }
+    }
+    if (!res.ok) {
+      const t = await res.text();
+      let msg = t || "Could not load models for selected host";
+      try {
+        const parsed = JSON.parse(t);
+        if (parsed && typeof parsed.detail === "string" && parsed.detail.trim()) {
+          msg = parsed.detail.trim();
+        }
+      } catch (e) {
+        /* keep plain text */
+      }
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    const names = Array.isArray(data.models) ? data.models.map((m) => (m && m.name ? m.name : "")).filter(Boolean) : [];
+    populateSettingsModelOptions(names, selectedModel);
+  }
+
+  async function loadSettingsForm() {
+    setSettingsStatus("", false);
+    try {
+      const keepModel =
+        (selectedModel && String(selectedModel).trim()) ||
+        (getPreference(MODEL_KEY) || "").trim();
+      await loadModels(keepModel ? { preferModel: keepModel } : {});
+      const res = await apiFetch("/api/settings");
+      if (!res.ok) {
+        throw new Error("Could not load settings");
+      }
+      const data = await res.json();
+      settingsLoadedHost = (data.ollama_host || "").trim();
+      if (els.settingsOllamaHost) els.settingsOllamaHost.value = data.ollama_host || "";
+      const modelForSelect =
+        keepModel ||
+        (selectedModel && String(selectedModel).trim()) ||
+        (getPreference(MODEL_KEY) || "").trim() ||
+        (data.cheapgpt_model || "");
+      await loadSettingsModelsForHost(data.ollama_host || "", modelForSelect);
+      if (keepModel && availableModels.some((m) => m.name === keepModel)) {
+        selectedModel = keepModel;
+        setPreference(MODEL_KEY, keepModel);
+        populateModelMenu();
+        updateModelPickerLabel();
+      }
+      updateSettingsApplyState();
+    } catch (e) {
+      setSettingsModelDisabled(true, "Unable to load models");
+      setSettingsStatus(e && e.message ? e.message : "Could not load settings", true);
+    }
+  }
+
+  async function openSettingsPage() {
+    if (isMobileView()) closeSidebarMobile();
+    closeChatMenu();
+    closeModelMenu();
+    closeShareModal();
+    if (els.settingsPage) els.settingsPage.hidden = false;
+    if (els.app) {
+      els.app.classList.add("settings-open");
+    }
+    await loadSettingsForm();
+  }
+
+  async function applySettings() {
+    const ollamaHost = (els.settingsOllamaHost && els.settingsOllamaHost.value.trim()) || "";
+    const model = (els.settingsModel && els.settingsModel.value) || "";
+    if (settingsHasError) {
+      updateSettingsApplyState();
+      return;
+    }
+    if (els.settingsModel && els.settingsModel.disabled) {
+      setSettingsStatus("Pick a valid Ollama host first so models can be loaded.", true);
+      return;
+    }
+    if (!ollamaHost || !model) {
+      setSettingsStatus("Please fill in both Ollama Host URL and Model.", true);
+      return;
+    }
+    if (els.btnSettingsApply) els.btnSettingsApply.disabled = true;
+    setSettingsStatus("Saving settings…", false);
+    try {
+      const res = await apiFetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ollama_host: ollamaHost,
+          cheapgpt_model: model,
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || "Could not save settings");
+      }
+      setPreference(MODEL_KEY, model);
+      setSettingsStatus("Saved. Returning to chat…", false);
+      const ok = await loadModels({ preferModel: model });
+      if (ok) {
+        closeSettingsPage();
+      } else {
+        setSettingsStatus("Saved, but model connection is still unavailable. Fix settings to continue.", true);
+      }
+    } catch (e) {
+      setSettingsStatus(e && e.message ? e.message : "Could not save settings", true);
+    } finally {
+      updateSettingsApplyState();
+    }
   }
 
   function setTemporaryChatMode(enabled, { persist } = { persist: true }) {
@@ -1044,20 +1424,52 @@
     else openModelMenu();
   }
 
+  /**
+   * Keep server memory aligned with the picker so GET /api/settings matches the UI on all devices.
+   */
+  function persistCheapgptModelToServer(modelName, explicitOllamaHost) {
+    const name = (modelName || "").trim();
+    if (!name) return Promise.resolve();
+    let host = (explicitOllamaHost || "").trim();
+    const run = async function () {
+      if (!host) {
+        try {
+          const r = await apiFetch("/api/settings");
+          if (!r.ok) return;
+          const s = await r.json();
+          host = (s.ollama_host || "").trim();
+        } catch (e) {
+          return;
+        }
+      }
+      if (!host) return;
+      try {
+        const res = await apiFetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ollama_host: host, cheapgpt_model: name }),
+        });
+        if (res.ok) {
+          setPreference(MODEL_KEY, name);
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    };
+    return run();
+  }
+
   function selectModel(name) {
     if (!availableModels.some((m) => m.name === name)) return;
     selectedModel = name;
     if (!modelSupportsThinking(name)) {
       setThinkingMode(false, { persist: false });
     }
-    try {
-      localStorage.setItem(MODEL_KEY, selectedModel);
-    } catch (e) {
-      /* ignore */
-    }
+    setPreference(MODEL_KEY, selectedModel);
     updateModelPickerLabel();
     populateModelMenu();
     closeModelMenu();
+    void persistCheapgptModelToServer(name);
   }
 
   function modelSupportsThinking(name) {
@@ -1068,21 +1480,23 @@
   function setThinkingMode(enabled, { persist } = { persist: true }) {
     thinkingMode = !!enabled && modelSupportsThinking(selectedModel);
     if (persist) {
-      try {
-        localStorage.setItem(THINKING_KEY, thinkingMode ? "1" : "0");
-      } catch (e) {
-        /* ignore */
-      }
+      setPreference(THINKING_KEY, thinkingMode ? "1" : "0");
     }
     updateModelPickerLabel();
     populateModelMenu();
     closeModelMenu();
   }
 
-  async function loadModels() {
+  /**
+   * @param {{ preferModel?: string }} [options]
+   * preferModel: after saving in Settings, force this name so we do not rely on a possibly stale localStorage write or cached GET.
+   */
+  async function loadModels(options) {
     if (!els.modelPickerLabel || !els.modelPickerBtn) return;
+    const prefer =
+      options && typeof options.preferModel === "string" ? options.preferModel.trim() : "";
     try {
-      const r = await fetch("/api/models");
+      const [r, settingsRes] = await Promise.all([apiFetch("/api/models"), apiFetch("/api/settings")]);
       if (!r.ok) {
         let msg = r.statusText;
         const t = await r.text();
@@ -1101,6 +1515,18 @@
         throw new Error(msg);
       }
       const j = await r.json();
+      let serverModel = "";
+      if (settingsRes.ok) {
+        try {
+          const s = await settingsRes.json();
+          serverModel = (s.cheapgpt_model || "").trim();
+        } catch (e) {
+          /* ignore */
+        }
+      }
+      if (!serverModel) {
+        serverModel = (j.configured_model || "").trim();
+      }
       availableModels = (j.models || [])
         .map(function (m) {
           if (!m || !m.name) return null;
@@ -1108,34 +1534,22 @@
         })
         .filter(Boolean);
 
-      let stored = null;
-      try {
-        stored = localStorage.getItem(MODEL_KEY);
-      } catch (e) {
-        /* ignore */
-      }
-
-      if (stored && availableModels.some((m) => m.name === stored)) {
-        selectedModel = stored;
-      } else if (j.default_model && availableModels.some((m) => m.name === j.default_model)) {
-        selectedModel = j.default_model;
-      } else {
-        selectedModel = availableModels[0] ? availableModels[0].name : "";
-      }
+      const stored = getPreference(MODEL_KEY);
+      const nameList = availableModels.map(function (m) {
+        return m.name;
+      });
+      selectedModel = pickResolvedModelName(nameList, {
+        prefer: prefer,
+        stored: stored,
+        serverModel: serverModel,
+        defaultModel: j.default_model || "",
+      });
 
       if (selectedModel) {
-        try {
-          localStorage.setItem(MODEL_KEY, selectedModel);
-        } catch (e) {
-          /* ignore */
-        }
+        setPreference(MODEL_KEY, selectedModel);
       }
 
-      try {
-        thinkingMode = localStorage.getItem(THINKING_KEY) === "1";
-      } catch (e) {
-        thinkingMode = false;
-      }
+      thinkingMode = getPreference(THINKING_KEY) === "1";
       if (!modelSupportsThinking(selectedModel)) {
         thinkingMode = false;
       }
@@ -1143,12 +1557,16 @@
       populateModelMenu();
       updateModelPickerLabel();
       els.modelPickerBtn.disabled = availableModels.length === 0 || isSending;
+      requiresSettingsFix = availableModels.length === 0 || !selectedModel;
+      return !requiresSettingsFix;
     } catch (e) {
       availableModels = [];
       selectedModel = "";
       updateModelPickerLabel();
       if (els.modelPickerMenu) els.modelPickerMenu.innerHTML = "";
       els.modelPickerBtn.disabled = true;
+      requiresSettingsFix = true;
+      return false;
     }
   }
 
@@ -1162,7 +1580,7 @@
     activeReader = null;
     let res;
     try {
-      res = await fetch("/api/chat", {
+      res = await apiFetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1376,7 +1794,14 @@
   renderMessages();
   updateEmptyState();
   updateChatMenuState();
-  loadModels();
+  async function initModelAvailabilityGate() {
+    const ok = await loadModels();
+    if (ok) return;
+    await openSettingsPage();
+    setSettingsStatus("Set Ollama host and model to continue.", true);
+  }
+
+  void initModelAvailabilityGate();
 
   if (els.modelPickerBtn) {
     els.modelPickerBtn.addEventListener("click", function () {
@@ -1436,6 +1861,62 @@
   }
   if (els.btnTopNewChat) {
     els.btnTopNewChat.addEventListener("click", newChat);
+  }
+  if (els.btnSettings) {
+    els.btnSettings.addEventListener("click", () => {
+      void openSettingsPage();
+    });
+  }
+  if (els.btnSettingsBack) {
+    els.btnSettingsBack.addEventListener("click", closeSettingsPage);
+  }
+  if (els.btnSettingsCancel) {
+    els.btnSettingsCancel.addEventListener("click", closeSettingsPage);
+  }
+  if (els.settingsForm) {
+    els.settingsForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      void applySettings();
+    });
+  }
+  if (els.settingsOllamaHost) {
+    els.settingsOllamaHost.addEventListener("blur", () => {
+      const host = els.settingsOllamaHost.value.trim();
+      if (!host) {
+        setSettingsModelDisabled(true, "Enter an Ollama host URL first");
+        setSettingsStatus("Ollama host is required.", true);
+        return;
+      }
+      const selected = (els.settingsModel && els.settingsModel.value) || "";
+      setSettingsStatus("Loading models…", false);
+      loadSettingsModelsForHost(host, selected)
+        .then(() => setSettingsStatus("", false))
+        .catch((e) => {
+          setSettingsModelDisabled(true, "Unable to load models");
+          setSettingsStatus(e && e.message ? e.message : "Could not load models for host", true);
+        });
+    });
+    els.settingsOllamaHost.addEventListener("input", () => {
+      settingsHasError = false;
+      setSettingsStatus("", false);
+      updateSettingsApplyState();
+    });
+  }
+  if (els.settingsModel) {
+    els.settingsModel.addEventListener("change", () => {
+      settingsHasError = false;
+      setSettingsStatus("", false);
+      updateSettingsApplyState();
+      const v = (els.settingsModel && els.settingsModel.value) || "";
+      if (v) {
+        selectedModel = v;
+        setPreference(MODEL_KEY, v);
+        populateModelMenu();
+        updateModelPickerLabel();
+        const host = (els.settingsOllamaHost && els.settingsOllamaHost.value.trim()) || "";
+        void persistCheapgptModelToServer(v, host);
+      }
+    });
   }
   if (els.btnTemporaryChat) {
     els.btnTemporaryChat.addEventListener("click", () => {

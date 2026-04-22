@@ -10,8 +10,7 @@ import os
 from pathlib import Path
 
 import httpx
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -19,8 +18,7 @@ from pydantic import BaseModel, Field
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
 
-load_dotenv(ROOT / ".env")
-
+# Defaults only; Settings in the UI updates process memory (and os.environ) for this run.
 OLLAMA_BASE = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 DEFAULT_MODEL = os.environ.get("CHEAPGPT_MODEL", "llama3.2")
 
@@ -62,6 +60,11 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(default_factory=list)
 
 
+class SettingsUpdate(BaseModel):
+    ollama_host: str
+    cheapgpt_model: str
+
+
 app = FastAPI(title="CheapGPT")
 
 
@@ -78,17 +81,33 @@ async def health():
 
 
 @app.get("/api/models")
-async def list_models():
+async def list_models(response: Response):
     """Proxy Ollama /api/tags for the UI model picker."""
+    response.headers["Cache-Control"] = "no-store"
+    models = await fetch_models(OLLAMA_BASE)
+    suggested = DEFAULT_MODEL
+    if models and not any(m["name"] == suggested for m in models):
+        suggested = models[0]["name"]
+
+    return {
+        "models": models,
+        "default_model": suggested,
+        # Raw CHEAPGPT_MODEL (always); UI can use if GET /api/settings fails on some clients.
+        "configured_model": DEFAULT_MODEL,
+        "ollama_base": OLLAMA_BASE,
+    }
+
+
+async def fetch_models(ollama_base: str) -> list[dict]:
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.get(f"{OLLAMA_BASE}/api/tags")
+            r = await client.get(f"{ollama_base}/api/tags")
             r.raise_for_status()
             payload = r.json()
     except httpx.ConnectError as e:
         raise HTTPException(
             status_code=502,
-            detail=f"Cannot connect to Ollama at {OLLAMA_BASE}: {e}",
+            detail=f"Cannot connect to Ollama at {ollama_base}: {e}",
         ) from e
     except httpx.HTTPError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
@@ -112,15 +131,46 @@ async def list_models():
         models.append(entry)
 
     models.sort(key=lambda m: m["name"].lower())
+    return models
 
-    suggested = DEFAULT_MODEL
-    if models and not any(m["name"] == suggested for m in models):
-        suggested = models[0]["name"]
+
+@app.get("/api/settings/models")
+async def settings_models(response: Response, ollama_host: str = Query(..., min_length=1)):
+    response.headers["Cache-Control"] = "no-store"
+    ollama_base = ollama_host.strip().rstrip("/")
+    models = await fetch_models(ollama_base)
+    return {"models": models, "ollama_base": ollama_base}
+
+
+@app.get("/api/settings")
+async def get_settings(response: Response):
+    response.headers["Cache-Control"] = "no-store"
+    return {
+        "ollama_host": OLLAMA_BASE,
+        "cheapgpt_model": DEFAULT_MODEL,
+    }
+
+
+@app.post("/api/settings")
+async def update_settings(req: SettingsUpdate):
+    global OLLAMA_BASE, DEFAULT_MODEL
+
+    ollama_host = req.ollama_host.strip().rstrip("/")
+    model = req.cheapgpt_model.strip()
+    if not ollama_host:
+        raise HTTPException(status_code=400, detail="ollama_host is required")
+    if not model:
+        raise HTTPException(status_code=400, detail="cheapgpt_model is required")
+
+    OLLAMA_BASE = ollama_host
+    DEFAULT_MODEL = model
+    os.environ["OLLAMA_HOST"] = ollama_host
+    os.environ["CHEAPGPT_MODEL"] = model
 
     return {
-        "models": models,
-        "default_model": suggested,
-        "ollama_base": OLLAMA_BASE,
+        "ok": True,
+        "ollama_host": OLLAMA_BASE,
+        "cheapgpt_model": DEFAULT_MODEL,
     }
 
 

@@ -7,6 +7,7 @@ CheapGPT is a lightweight ChatGPT-style web UI served by FastAPI, with chat resp
 ## Features
 
 - ChatGPT-like interface with chat history
+- Chat history search (title + content, includes archived chats)
 - Streaming responses from Ollama
 - Model picker from Ollama `/api/tags`
 - Share modal with copy conversation support

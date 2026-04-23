@@ -51,6 +51,10 @@
         </div>
 
         <div class="sidebar-scroll">
+          <button type="button" class="btn-sidebar-search" id="btnSidebarSearch" aria-label="Search chats">
+            <span class="icon-search" aria-hidden="true"></span>
+            <span>Search chats</span>
+          </button>
           <div class="sidebar-section-label" id="chatListLabel">Chats</div>
           <nav class="chat-list" id="chatList" role="list"></nav>
           <div class="sidebar-archived-block" id="archivedSection">
@@ -296,6 +300,38 @@
                 </button>
               </div>
             </footer>
+          </div>
+        </div>
+      </div>
+
+      <div class="search-modal-root" id="searchModalRoot" aria-hidden="true">
+        <div class="search-modal-backdrop" id="searchModalBackdrop" aria-hidden="true"></div>
+        <div
+          class="search-modal"
+          id="searchModal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Search chats"
+          tabindex="-1"
+        >
+          <div class="search-modal-inner">
+            <div class="search-modal-body">
+              <div class="search-modal-input-wrap">
+                <span class="icon-search" aria-hidden="true"></span>
+                <input
+                  type="text"
+                  class="search-modal-input"
+                  id="searchChatsInput"
+                  placeholder="Search chats"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button type="button" class="search-modal-input-close" id="searchModalClose" aria-label="Close search">
+                  <span class="share-modal-close-icon" aria-hidden="true"></span>
+                </button>
+              </div>
+              <div class="search-modal-results" id="searchModalResults" role="list" aria-label="Chat search results"></div>
+            </div>
           </div>
         </div>
       </div>

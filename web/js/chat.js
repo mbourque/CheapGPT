@@ -164,6 +164,7 @@
     btnRailNewChat: document.getElementById("btnRailNewChat"),
     btnRailRecents: document.getElementById("btnRailRecents"),
     btnNewChat: document.getElementById("btnNewChat"),
+    btnSidebarSearch: document.getElementById("btnSidebarSearch"),
     chatListLabel: document.getElementById("chatListLabel"),
     chatList: document.getElementById("chatList"),
     archivedSection: document.getElementById("archivedSection"),
@@ -195,6 +196,12 @@
     shareModalPreview: document.getElementById("shareModalPreview"),
     shareModalClose: document.getElementById("shareModalClose"),
     shareBtnCopyThread: document.getElementById("shareBtnCopyThread"),
+    searchModalRoot: document.getElementById("searchModalRoot"),
+    searchModalBackdrop: document.getElementById("searchModalBackdrop"),
+    searchModal: document.getElementById("searchModal"),
+    searchModalClose: document.getElementById("searchModalClose"),
+    searchChatsInput: document.getElementById("searchChatsInput"),
+    searchModalResults: document.getElementById("searchModalResults"),
     menuPinChat: document.getElementById("menuPinChat"),
     menuArchiveChat: document.getElementById("menuArchiveChat"),
     menuDeleteChat: document.getElementById("menuDeleteChat"),
@@ -235,6 +242,7 @@
   let streamAbortController = null;
   /** @type {ReadableStreamDefaultReader<Uint8Array> | null} */
   let activeReader = null;
+  let searchModalOpen = false;
 
   function uid() {
     return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
@@ -328,6 +336,10 @@
     if (els.archivedSection) {
       els.archivedSection.hidden = archived.length === 0;
       els.archivedSection.setAttribute("aria-hidden", archived.length === 0 ? "true" : "false");
+    }
+    updateSearchButtonState();
+    if (searchModalOpen) {
+      renderSearchResults((els.searchChatsInput && els.searchChatsInput.value) || "");
     }
   }
 
@@ -681,12 +693,192 @@
     closeChatMenu();
     closeModelMenu();
     closeShareModal();
+    closeSearchModal({ restoreFocus: false });
     activeId = id;
     save();
     renderChatList();
     renderMessages();
     updateEmptyState();
     closeSidebarMobile();
+  }
+
+  function normalizeSearchText(s) {
+    return String(s || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function getChatSearchSnippet(chat) {
+    if (!chat || !Array.isArray(chat.messages)) return "";
+    for (let i = chat.messages.length - 1; i >= 0; i--) {
+      const m = chat.messages[i];
+      const text = String((m && m.content) || "")
+        // fenced code blocks
+        .replace(/```[\s\S]*?```/g, " ")
+        // inline code
+        .replace(/`([^`]*)`/g, "$1")
+        // markdown links: [text](url) -> text
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
+        // emphasis/strong/strike markers
+        .replace(/(\*\*|__|\*|_|~~)/g, "")
+        // blockquote + heading markers at line starts
+        .replace(/^\s{0,3}(>+|#{1,6})\s*/gm, "")
+        // unordered/ordered list prefixes at line starts
+        .replace(/^\s*([-+*]|\d+\.)\s+/gm, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (text) return text;
+    }
+    return "";
+  }
+
+  function getChatSearchTitle(chat) {
+    if (!chat) return "New chat";
+    const fallback = String(chat.title || "New chat").trim() || "New chat";
+    if (!Array.isArray(chat.messages) || chat.messages.length === 0) return fallback;
+    const firstUser = chat.messages.find((m) => m && m.role === "user" && typeof m.content === "string");
+    if (!firstUser) return fallback;
+    const full = firstUser.content.replace(/\s+/g, " ").trim();
+    return full || fallback;
+  }
+
+  function escapeRegExp(text) {
+    return String(text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  function highlightMatch(text, queryRaw) {
+    const src = String(text || "");
+    const q = String(queryRaw || "").trim();
+    if (!q) return escapeHtml(src);
+    const re = new RegExp("(" + escapeRegExp(q) + ")", "ig");
+    return escapeHtml(src).replace(re, '<strong class="search-result-mark">$1</strong>');
+  }
+
+  function buildMatchedSnippet(chat, queryRaw) {
+    const full = getChatSearchSnippet(chat);
+    const query = String(queryRaw || "").trim();
+    if (!full) return "No messages yet";
+    if (!query) {
+      const preview = full.slice(0, 88).trim();
+      return "... " + preview + " ...";
+    }
+    const lower = full.toLowerCase();
+    const qLower = query.toLowerCase();
+    const matchIdx = lower.indexOf(qLower);
+    if (matchIdx < 0) {
+      const fallback = full.slice(0, 72).trim();
+      return "... " + fallback + " ...";
+    }
+    const context = 34;
+    const start = Math.max(0, matchIdx - context);
+    const end = Math.min(full.length, matchIdx + query.length + context);
+    const chunk = full.slice(start, end).trim();
+    return "... " + chunk + " ...";
+  }
+
+  function getSearchableChats() {
+    return chats.filter((c) => Array.isArray(c.messages) && c.messages.length > 0);
+  }
+
+  function updateSearchButtonState() {
+    if (!els.btnSidebarSearch) return;
+    const hasHistory = getSearchableChats().length > 0;
+    els.btnSidebarSearch.disabled = !hasHistory;
+    els.btnSidebarSearch.setAttribute("aria-disabled", hasHistory ? "false" : "true");
+    els.btnSidebarSearch.title = hasHistory ? "Search chats" : "No chat history yet";
+  }
+
+  function getMatchingChats(queryRaw) {
+    const query = normalizeSearchText(queryRaw);
+    const source = getSearchableChats();
+    if (!query) return source.slice();
+    return source.filter((chat) => {
+      const title = normalizeSearchText(getChatSearchTitle(chat));
+      const snippet = normalizeSearchText(getChatSearchSnippet(chat));
+      return title.includes(query) || snippet.includes(query);
+    });
+  }
+
+  function renderSearchResults(queryRaw) {
+    if (!els.searchModalResults) return;
+    const results = getMatchingChats(queryRaw);
+    els.searchModalResults.innerHTML = "";
+    if (results.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "search-modal-empty";
+      empty.textContent = "No matching chats";
+      els.searchModalResults.appendChild(empty);
+      return;
+    }
+    results.forEach((chat) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "search-result-item";
+      btn.setAttribute("role", "listitem");
+      const title = getChatSearchTitle(chat);
+      const snippet = buildMatchedSnippet(chat, queryRaw);
+      btn.innerHTML =
+        '<span class="search-result-icon" aria-hidden="true"><span class="icon-chat-bubble"></span></span>' +
+        '<span class="search-result-text"><span class="search-result-title">' +
+        highlightMatch(title, queryRaw) +
+        "</span>" +
+        '<span class="search-result-snippet">' +
+        highlightMatch(snippet || "No messages yet", queryRaw) +
+        "</span></span>";
+      btn.addEventListener("click", () => {
+        closeSearchModal({ restoreFocus: false });
+        selectChat(chat.id);
+      });
+      els.searchModalResults.appendChild(btn);
+    });
+  }
+
+  function onSearchModalBackdropClick() {
+    closeSearchModal();
+  }
+
+  function onSearchModalKeyDown(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeSearchModal();
+    }
+  }
+
+  function closeSearchModal(opts) {
+    const restoreFocus = !opts || opts.restoreFocus !== false;
+    if (!searchModalOpen || !els.searchModalRoot) return;
+    searchModalOpen = false;
+    els.searchModalRoot.classList.remove("is-open");
+    els.searchModalRoot.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    document.removeEventListener("keydown", onSearchModalKeyDown, true);
+    if (els.searchModalBackdrop) els.searchModalBackdrop.removeEventListener("click", onSearchModalBackdropClick);
+    if (els.searchChatsInput) els.searchChatsInput.value = "";
+    if (restoreFocus && els.btnSidebarSearch) els.btnSidebarSearch.focus();
+  }
+
+  function openSearchModal() {
+    if (!els.searchModalRoot) return;
+    if (searchModalOpen) return;
+    closeChatMenu();
+    closeModelMenu();
+    closeShareModal();
+    searchModalOpen = true;
+    els.searchModalRoot.classList.add("is-open");
+    els.searchModalRoot.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onSearchModalKeyDown, true);
+    if (els.searchModalBackdrop) els.searchModalBackdrop.addEventListener("click", onSearchModalBackdropClick);
+    renderSearchResults("");
+    requestAnimationFrame(() => {
+      if (els.searchChatsInput) {
+        els.searchChatsInput.focus();
+        els.searchChatsInput.select();
+      } else if (els.searchModal) {
+        els.searchModal.focus();
+      }
+    });
   }
 
   function openSidebarMobile() {
@@ -1024,6 +1216,7 @@
     closeChatMenu();
     closeModelMenu();
     closeShareModal();
+    closeSearchModal({ restoreFocus: false });
     if (els.settingsPage) els.settingsPage.hidden = false;
     if (els.app) {
       els.app.classList.add("settings-open");
@@ -1165,6 +1358,7 @@
     if (els.shareModalRoot.classList.contains("is-open")) closeShareModal();
     shareModalChat = chat;
     closeChatMenu();
+    closeSearchModal({ restoreFocus: false });
     if (els.shareModalTitle) els.shareModalTitle.textContent = chat.title || "Share";
     renderSharePreview(chat);
     els.shareModalRoot.classList.add("is-open");
@@ -1826,6 +2020,30 @@
   if (els.shareBtnCopyThread) {
     els.shareBtnCopyThread.addEventListener("click", () => {
       void copyThreadFromShareModal();
+    });
+  }
+  if (els.btnSidebarSearch) {
+    const handleSidebarSearchActivate = (e) => {
+      if (els.btnSidebarSearch.disabled) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (isMobileView()) {
+        closeSidebarMobile();
+        requestAnimationFrame(() => openSearchModal());
+      } else {
+        openSearchModal();
+      }
+    };
+    els.btnSidebarSearch.addEventListener("click", handleSidebarSearchActivate);
+    els.btnSidebarSearch.addEventListener("pointerup", handleSidebarSearchActivate);
+    els.btnSidebarSearch.addEventListener("touchend", handleSidebarSearchActivate, { passive: false });
+  }
+  if (els.searchModalClose) {
+    els.searchModalClose.addEventListener("click", () => closeSearchModal());
+  }
+  if (els.searchChatsInput) {
+    els.searchChatsInput.addEventListener("input", () => {
+      renderSearchResults(els.searchChatsInput.value);
     });
   }
   if (els.menuPinChat) {

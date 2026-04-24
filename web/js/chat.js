@@ -1374,7 +1374,7 @@
   }
 
   function getSearchableChats() {
-    return chats.filter((c) => Array.isArray(c.messages) && c.messages.length > 0);
+    return chats.filter((c) => !c.archived && Array.isArray(c.messages) && c.messages.length > 0);
   }
 
   function updateSearchButtonState() {

@@ -1636,6 +1636,22 @@
     if (!els.modelPickerMenu) return;
     els.modelPickerMenu.innerHTML = "";
     const supportsThinking = modelSupportsThinking(selectedModel);
+
+    const configure = document.createElement("button");
+    configure.type = "button";
+    configure.className = "model-picker-option model-picker-option--configure";
+    configure.innerHTML =
+      '<span class="model-picker-option-icon icon-gear" aria-hidden="true"></span><span class="model-picker-option-label">Configure...</span>';
+    configure.addEventListener("click", () => {
+      closeModelMenu();
+      void openSettingsPage();
+    });
+    els.modelPickerMenu.appendChild(configure);
+
+    const topSep = document.createElement("div");
+    topSep.className = "model-picker-separator";
+    els.modelPickerMenu.appendChild(topSep);
+
     const label = document.createElement("div");
     label.className = "model-picker-section-label";
     label.textContent = "Mode";

@@ -703,6 +703,18 @@ textarea {
   transition: background 0.1s ease;
 }
 
+.model-picker-option--configure {
+  font-weight: 500;
+}
+
+.model-picker-option-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  background: currentColor;
+  opacity: 0.85;
+}
+
 .model-picker-option:hover {
   background: var(--bg-hover);
 }

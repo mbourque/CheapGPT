@@ -200,6 +200,13 @@
             </button>
             <form class="composer" id="composerForm" autocomplete="off">
               <div class="composer-field">
+                <div class="composer-quote-context" id="composerQuoteContext" hidden>
+                  <span class="icon-quote-turn" aria-hidden="true"></span>
+                  <span class="composer-quote-text" id="composerQuoteText"></span>
+                  <button type="button" class="composer-quote-clear" id="btnComposerQuoteClear" aria-label="Remove quote">
+                    <span class="share-modal-close-icon" aria-hidden="true"></span>
+                  </button>
+                </div>
                 <textarea
                   id="messageInput"
                   class="composer-input"

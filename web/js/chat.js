@@ -176,6 +176,9 @@
     temporaryChatNotice: document.getElementById("temporaryChatNotice"),
     suggestionGrid: document.getElementById("suggestionGrid"),
     composerForm: document.getElementById("composerForm"),
+    composerQuoteContext: document.getElementById("composerQuoteContext"),
+    composerQuoteText: document.getElementById("composerQuoteText"),
+    btnComposerQuoteClear: document.getElementById("btnComposerQuoteClear"),
     messageInput: document.getElementById("messageInput"),
     btnStop: document.getElementById("btnStop"),
     btnSend: document.getElementById("btnSend"),
@@ -219,7 +222,7 @@
     app: document.getElementById("app"),
   };
 
-  /** @type {{ id: string, title: string, pinned?: boolean, archived?: boolean, messages: { role: string, content: string, feedback?: "up" | "down" | null }[] }[]} */
+  /** @type {{ id: string, title: string, pinned?: boolean, archived?: boolean, messages: { role: string, content: string, quoteContext?: string, feedback?: "up" | "down" | null }[] }[]} */
   let chats = [];
   let activeId = null;
 
@@ -243,6 +246,9 @@
   /** @type {ReadableStreamDefaultReader<Uint8Array> | null} */
   let activeReader = null;
   let searchModalOpen = false;
+  let selectionAskButton = null;
+  let selectionAskText = "";
+  let pendingQuoteContextText = "";
 
   function uid() {
     return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
@@ -454,6 +460,17 @@
         body.appendChild(createAssistantActions(content, messageIndex));
       }
     } else {
+      const chat = activeChat();
+      const msg = chat && messageIndex >= 0 && chat.messages ? chat.messages[messageIndex] : null;
+      if (msg && msg.quoteContext) {
+        const quoted = document.createElement("div");
+        quoted.className = "msg-user-quote-ref";
+        quoted.innerHTML =
+          '<span class="msg-user-quote-icon icon-quote-turn" aria-hidden="true"></span><span class="msg-user-quote-text">' +
+          escapeHtml(msg.quoteContext) +
+          "</span>";
+        body.appendChild(quoted);
+      }
       const bubble = document.createElement("div");
       bubble.className = "msg-user-bubble";
       bubble.textContent = content;
@@ -603,6 +620,109 @@
         btn.setAttribute("aria-label", "Copy code");
       }, 1600);
     });
+  }
+
+  function ensureSelectionAskButton() {
+    if (selectionAskButton) return selectionAskButton;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "selection-ask-btn";
+    btn.setAttribute("aria-label", "Ask CheapGPT about selected text");
+    btn.hidden = true;
+    btn.innerHTML =
+      '<span class="selection-ask-icon icon-quote-double" aria-hidden="true"></span><span>Ask CheapGPT</span>';
+    btn.addEventListener("click", () => {
+      if (!selectionAskText || !els.messageInput) return;
+      setPendingQuoteContext(selectionAskText);
+      hideSelectionAskButton();
+      try {
+        window.getSelection().removeAllRanges();
+      } catch (e) {
+        /* ignore */
+      }
+      autosize();
+      updateSendState();
+      updateEmptyState();
+      els.messageInput.focus();
+    });
+    document.body.appendChild(btn);
+    selectionAskButton = btn;
+    return btn;
+  }
+
+  function hideSelectionAskButton() {
+    if (!selectionAskButton) return;
+    selectionAskButton.hidden = true;
+    selectionAskButton.style.left = "";
+    selectionAskButton.style.top = "";
+    selectionAskText = "";
+  }
+
+  function normalizeQuotedContextText(text) {
+    return String(text || "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function renderPendingQuoteContext() {
+    if (!els.composerQuoteContext || !els.composerQuoteText) return;
+    const hasQuote = !!pendingQuoteContextText;
+    els.composerQuoteContext.hidden = !hasQuote;
+    if (hasQuote) {
+      els.composerQuoteText.textContent = "“" + pendingQuoteContextText + "”";
+    } else {
+      els.composerQuoteText.textContent = "";
+    }
+  }
+
+  function setPendingQuoteContext(text) {
+    const normalized = normalizeQuotedContextText(text);
+    if (!normalized) return;
+    pendingQuoteContextText = normalized.length > 420 ? normalized.slice(0, 417) + "..." : normalized;
+    renderPendingQuoteContext();
+  }
+
+  function clearPendingQuoteContext() {
+    pendingQuoteContextText = "";
+    renderPendingQuoteContext();
+  }
+
+  function getSelectionRangeInAssistant() {
+    const sel = window.getSelection ? window.getSelection() : null;
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+    const text = String(sel.toString() || "").replace(/\s+/g, " ").trim();
+    if (!text || text.length < 2) return null;
+    const range = sel.getRangeAt(0);
+    const anchorNode = range.commonAncestorContainer;
+    if (!anchorNode) return null;
+    const anchorEl = anchorNode.nodeType === 1 ? anchorNode : anchorNode.parentElement;
+    if (!anchorEl) return null;
+    if (anchorEl.closest("textarea, input, button, .selection-ask-btn")) return null;
+    if (!anchorEl.closest(".msg-row--assistant")) return null;
+    return { range, text };
+  }
+
+  function maybeShowSelectionAskButton() {
+    const data = getSelectionRangeInAssistant();
+    if (!data) {
+      hideSelectionAskButton();
+      return;
+    }
+    const btn = ensureSelectionAskButton();
+    const rect = data.range.getBoundingClientRect();
+    if (!rect || (!rect.width && !rect.height)) {
+      hideSelectionAskButton();
+      return;
+    }
+    selectionAskText = data.text;
+    btn.hidden = false;
+    const gap = 10;
+    const left = rect.left + rect.width / 2;
+    const showBelow = rect.top < 56;
+    const preferredTop = showBelow ? rect.bottom + gap : rect.top - gap;
+    btn.style.left = left + "px";
+    btn.style.top = preferredTop + "px";
+    btn.style.transform = showBelow ? "translate(-50%, 0)" : "translate(-50%, -100%)";
   }
 
   async function copyToClipboard(text) {
@@ -937,6 +1057,7 @@
     const resetComposerDraft = () => {
       if (!els.messageInput) return;
       els.messageInput.value = "";
+      clearPendingQuoteContext();
       autosize();
       updateSendState();
       updateEmptyState();
@@ -1809,13 +1930,18 @@
     return acc;
   }
 
-  async function sendMessage(text, { regenerate } = { regenerate: false }) {
+  async function sendMessage(text, { regenerate, quoteContext } = { regenerate: false, quoteContext: "" }) {
     const chat = activeChat();
     if (!chat || !text.trim() || isSending) return;
 
     const userText = text.trim();
+    const normalizedQuoteContext = normalizeQuotedContextText(quoteContext || "");
     if (!regenerate) {
-      chat.messages.push({ role: "user", content: userText });
+      chat.messages.push({
+        role: "user",
+        content: userText,
+        quoteContext: normalizedQuoteContext || undefined,
+      });
       ensureTitleFromFirstMessage(userText);
     }
 
@@ -1862,8 +1988,22 @@
 
     let reply = "";
     let latestAccumulated = "";
+    let outboundMessages = chat.messages;
+    if (!regenerate) {
+      const quote = normalizedQuoteContext;
+      if (quote) {
+        const idx = chat.messages.length - 1;
+        if (idx >= 0) {
+          outboundMessages = chat.messages.slice();
+          outboundMessages[idx] = {
+            ...outboundMessages[idx],
+            content: 'Quoted excerpt: "' + quote + '"\n\nFollow-up question: ' + userText,
+          };
+        }
+      }
+    }
     try {
-      reply = await streamChat(chat.messages, (full) => {
+      reply = await streamChat(outboundMessages, (full) => {
         latestAccumulated = full;
         renderAccumulated(full);
       });
@@ -2189,11 +2329,20 @@
     e.preventDefault();
     const text = els.messageInput.value;
     if (!text.trim()) return;
+    const quoteContext = pendingQuoteContextText;
     els.messageInput.value = "";
     autosize();
     updateSendState();
-    await sendMessage(text);
+    clearPendingQuoteContext();
+    await sendMessage(text, { quoteContext: quoteContext });
   });
+
+  if (els.btnComposerQuoteClear) {
+    els.btnComposerQuoteClear.addEventListener("click", () => {
+      clearPendingQuoteContext();
+      if (els.messageInput) els.messageInput.focus();
+    });
+  }
 
   els.messageInput.addEventListener("input", () => {
     autosize();
@@ -2229,5 +2378,21 @@
     els.btnStop.hidden = true;
     els.btnStop.disabled = true;
   }
+  renderPendingQuoteContext();
   autosize();
+
+  document.addEventListener("selectionchange", () => {
+    requestAnimationFrame(maybeShowSelectionAskButton);
+  });
+  document.addEventListener("mousedown", (e) => {
+    if (!selectionAskButton || selectionAskButton.hidden) return;
+    if (!selectionAskButton.contains(e.target)) hideSelectionAskButton();
+  });
+  if (els.thread) {
+    els.thread.addEventListener("scroll", hideSelectionAskButton, { passive: true });
+  }
+  window.addEventListener("resize", hideSelectionAskButton);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hideSelectionAskButton();
+  });
 })();

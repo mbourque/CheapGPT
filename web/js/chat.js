@@ -149,10 +149,31 @@
   }
 
   const suggestions = [
-    { title: "Explain a concept", text: "Explain how attention works in transformers in simple terms." },
-    { title: "Draft an email", text: "Draft a short professional email postponing a meeting by one day." },
-    { title: "Debug help", text: "What are common causes of a 502 from a reverse proxy to an upstream app?" },
-    { title: "Summarize", text: "Summarize the key differences between REST and GraphQL APIs." },
+    { category: "tech", title: "Summarize", text: "Summarize the key differences between REST and GraphQL APIs." },
+    { category: "tech", title: "Debug help", text: "What are common causes of a 502 from a reverse proxy to an upstream app?" },
+    { category: "tech", title: "Explain a concept", text: "Explain how attention works in transformers in simple terms." },
+    { category: "practical", title: "Draft an email", text: "Draft a short professional email postponing a meeting by one day." },
+    { category: "practical", title: "Plan a trip", text: "Plan a 3 day weekend trip to a coastal town with food and activities." },
+    { category: "practical", title: "Meal plan", text: "Create a simple 5 day dinner plan with a grocery list." },
+    { category: "practical", title: "Fitness routine", text: "Create a beginner workout plan for 3 days a week." },
+    { category: "practical", title: "Daily schedule", text: "Help me organize a productive daily routine." },
+    { category: "practical", title: "Budget help", text: "Create a simple monthly budget template." },
+    { category: "practical", title: "Gift ideas", text: "Suggest thoughtful gift ideas for someone who loves art and music." },
+    { category: "creative", title: "Book summary", text: "Summarize the key ideas from a popular nonfiction book." },
+    { category: "creative", title: "Creative writing", text: "Write a short story about a surprising discovery." },
+    { category: "creative", title: "Motivation boost", text: "Give me a short motivational message to stay focused." },
+    { category: "practical", title: "Decision helper", text: "Help me decide between two options with pros and cons." },
+    { category: "practical", title: "Event planning", text: "Plan a small backyard party with food and activities." },
+    { category: "practical", title: "Home organization", text: "Give tips to declutter and organize a small space." },
+    { category: "creative", title: "Learning something new", text: "Teach me the basics of a new hobby in simple steps." },
+    { category: "practical", title: "Recipe idea", text: "Give me a quick recipe using common ingredients." },
+    { category: "creative", title: "Conversation starter", text: "Give me interesting questions to ask in a group." },
+    { category: "practical", title: "Travel packing list", text: "Create a packing list for a weekend trip." },
+    { category: "practical", title: "Time saver tips", text: "Give practical ways to save time during the day." },
+    { category: "creative", title: "Personal reflection", text: "Ask me questions to help clarify my goals." },
+    { category: "creative", title: "Habit building", text: "Help me build a new habit and stick to it." },
+    { category: "creative", title: "Fun facts", text: "Share interesting and surprising facts about a topic." },
+    { category: "practical", title: "Weekend ideas", text: "Suggest fun things to do this weekend nearby or at home." },
   ];
 
   const els = {
@@ -165,6 +186,19 @@
     btnRailRecents: document.getElementById("btnRailRecents"),
     btnNewChat: document.getElementById("btnNewChat"),
     btnSidebarSearch: document.getElementById("btnSidebarSearch"),
+    projectsListWrap: document.getElementById("projectsListWrap"),
+    btnProjectsToggle: document.getElementById("btnProjectsToggle"),
+    recentsListWrap: document.getElementById("recentsListWrap"),
+    btnRecentsToggle: document.getElementById("btnRecentsToggle"),
+    archivedListWrap: document.getElementById("archivedListWrap"),
+    btnArchivedToggle: document.getElementById("btnArchivedToggle"),
+    btnProjectNew: document.getElementById("btnProjectNew"),
+    projectList: document.getElementById("projectList"),
+    projectWorkspace: document.getElementById("projectWorkspace"),
+    projectWorkspaceTitle: document.getElementById("projectWorkspaceTitle"),
+    btnProjectNewChat: document.getElementById("btnProjectNewChat"),
+    projectInstructionsInput: document.getElementById("projectInstructionsInput"),
+    projectChatList: document.getElementById("projectChatList"),
     chatListLabel: document.getElementById("chatListLabel"),
     chatList: document.getElementById("chatList"),
     archivedSection: document.getElementById("archivedSection"),
@@ -205,6 +239,12 @@
     searchModalClose: document.getElementById("searchModalClose"),
     searchChatsInput: document.getElementById("searchChatsInput"),
     searchModalResults: document.getElementById("searchModalResults"),
+    projectModalRoot: document.getElementById("projectModalRoot"),
+    projectModalBackdrop: document.getElementById("projectModalBackdrop"),
+    projectModal: document.getElementById("projectModal"),
+    projectModalForm: document.getElementById("projectModalForm"),
+    projectNameInput: document.getElementById("projectNameInput"),
+    btnProjectModalCancel: document.getElementById("btnProjectModalCancel"),
     menuPinChat: document.getElementById("menuPinChat"),
     menuArchiveChat: document.getElementById("menuArchiveChat"),
     menuDeleteChat: document.getElementById("menuDeleteChat"),
@@ -224,7 +264,13 @@
 
   /** @type {{ id: string, title: string, pinned?: boolean, archived?: boolean, messages: { role: string, content: string, quoteContext?: string, feedback?: "up" | "down" | null }[] }[]} */
   let chats = [];
+  /** @type {{ id: string, name: string, description?: string, instructions?: string }[]} */
+  let projects = [];
   let activeId = null;
+  let activeProjectId = null;
+  let projectsCollapsed = false;
+  let recentsCollapsed = false;
+  let archivedCollapsed = true;
 
   /** @type {{name: string, supportsThinking: boolean}[]} */
   let availableModels = [];
@@ -249,6 +295,12 @@
   let selectionAskButton = null;
   let selectionAskText = "";
   let pendingQuoteContextText = "";
+  let projectMenuOpenId = null;
+  let recentMenuOpenId = null;
+  let projectOverviewOpen = false;
+  let projectModalMode = "create";
+  let projectModalTargetId = null;
+  let lastSuggestionsChatId = null;
 
   function uid() {
     return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
@@ -260,18 +312,49 @@
       if (raw) {
         const data = JSON.parse(raw);
         if (Array.isArray(data.chats)) chats = data.chats;
+        if (Array.isArray(data.projects)) projects = data.projects;
         if (data.activeId && chats.some((c) => c.id === data.activeId)) activeId = data.activeId;
+        if (typeof data.activeProjectId === "string" || data.activeProjectId === null) {
+          activeProjectId = data.activeProjectId;
+        }
+        if (typeof data.projectsCollapsed === "boolean") projectsCollapsed = data.projectsCollapsed;
+        if (typeof data.recentsCollapsed === "boolean") recentsCollapsed = data.recentsCollapsed;
+        if (typeof data.archivedCollapsed === "boolean") archivedCollapsed = data.archivedCollapsed;
       }
     } catch {
       chats = [];
+      projects = [];
+    }
+    // On refresh, always return to normal (non-project) mode.
+    activeProjectId = null;
+    projectOverviewOpen = false;
+    chats.forEach((c) => {
+      if (typeof c.projectId !== "string") c.projectId = null;
+    });
+    if (activeProjectId && !projects.some((p) => p.id === activeProjectId)) {
+      activeProjectId = null;
     }
     if (chats.length === 0) {
       const id = uid();
-      chats.push({ id, title: "New chat", messages: [] });
+      chats.push({ id, title: "New chat", projectId: null, messages: [] });
       activeId = id;
       save();
     } else if (!activeId) {
-      activeId = chats[0].id;
+      const general = chats.find((c) => !c.projectId);
+      activeId = (general || chats[0]).id;
+    }
+
+    // Ensure refresh lands on the main screen (blank general draft), not history.
+    const existingGeneralDraft = chats.find(
+      (c) => !c.projectId && Array.isArray(c.messages) && c.messages.length === 0
+    );
+    if (existingGeneralDraft) {
+      activeId = existingGeneralDraft.id;
+    } else {
+      const id = uid();
+      chats.unshift({ id, title: "New chat", projectId: null, messages: [] });
+      activeId = id;
+      save();
     }
   }
 
@@ -280,7 +363,18 @@
     // Keep history clean: drop non-active chats that have no messages.
     chats = chats.filter((c) => c.id === activeId || (Array.isArray(c.messages) && c.messages.length > 0));
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ chats, activeId }));
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          chats,
+          activeId,
+          projects,
+          activeProjectId,
+          projectsCollapsed,
+          recentsCollapsed,
+          archivedCollapsed,
+        })
+      );
     } catch {
       /* ignore quota */
     }
@@ -298,6 +392,17 @@
     return chats.find((c) => c.id === activeId) || null;
   }
 
+  function activeProject() {
+    if (!activeProjectId) return null;
+    return projects.find((p) => p.id === activeProjectId) || null;
+  }
+
+  function chatInCurrentScope(chat) {
+    const pid = chat && chat.projectId ? String(chat.projectId) : null;
+    if (activeProjectId) return pid === activeProjectId;
+    return !pid;
+  }
+
   function truncateTitle(text, max = 36) {
     const t = text.trim().replace(/\s+/g, " ");
     if (t.length <= max) return t || "New chat";
@@ -309,56 +414,407 @@
     if (els.archivedChatList) els.archivedChatList.innerHTML = "";
 
     const visibleChats = chats
-      .filter((c) => Array.isArray(c.messages) && c.messages.length > 0)
+      .filter((c) => !c.projectId)
       .filter((c) => !c.archived)
+      .filter((c) => Array.isArray(c.messages) && c.messages.length > 0)
       .sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
     visibleChats.forEach((c) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "chat-item" + (c.id === activeId ? " is-active" : "");
-      btn.role = "listitem";
-      btn.textContent = (c.pinned ? "📌 " : "") + (c.title || "New chat");
-      btn.title = (c.pinned ? "Pinned: " : "") + (c.title || "New chat");
-      btn.addEventListener("click", () => selectChat(c.id));
-      els.chatList.appendChild(btn);
+      els.chatList.appendChild(createRecentChatRow(c, { archived: false }));
     });
-    if (els.chatListLabel) {
-      els.chatListLabel.hidden = visibleChats.length === 0;
-    }
-
-    const archived = chats.filter((c) => c.archived && Array.isArray(c.messages) && c.messages.length > 0);
+    const archived = chats.filter((c) => !c.projectId && c.archived && Array.isArray(c.messages) && c.messages.length > 0);
     if (els.archivedChatList) {
       archived.forEach((c) => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "chat-item" + (c.id === activeId ? " is-active" : "");
-        btn.role = "listitem";
-        btn.textContent = c.title || "Archived chat";
-        btn.title = "Archived: " + (c.title || "Archived chat");
-        btn.addEventListener("click", () => selectChat(c.id));
-        els.archivedChatList.appendChild(btn);
+        els.archivedChatList.appendChild(createRecentChatRow(c, { archived: true }));
       });
     }
     if (els.archivedSection) {
       els.archivedSection.hidden = archived.length === 0;
       els.archivedSection.setAttribute("aria-hidden", archived.length === 0 ? "true" : "false");
     }
+    const hasAnyRecents = visibleChats.length > 0;
+    const recentsBlock = document.getElementById("recentsBlock");
+    if (recentsBlock) {
+      recentsBlock.hidden = !hasAnyRecents;
+      recentsBlock.setAttribute("aria-hidden", hasAnyRecents ? "false" : "true");
+    }
+    renderProjectWorkspace();
+    renderProjectChatList();
+    renderProjectList();
+    syncProjectOverviewUi();
     updateSearchButtonState();
     if (searchModalOpen) {
       renderSearchResults((els.searchChatsInput && els.searchChatsInput.value) || "");
     }
   }
 
+  function renderProjectList() {
+    if (!els.projectList) return;
+    const hasProjects = projects.length > 0;
+    const projectsHead = els.projectsBlock ? els.projectsBlock.querySelector(".projects-head") : null;
+    if (projectsHead) projectsHead.hidden = !hasProjects;
+    if (els.btnProjectsToggle) els.btnProjectsToggle.hidden = !hasProjects;
+    if (els.projectsBlock) {
+      els.projectsBlock.classList.toggle("is-empty", !hasProjects);
+    }
+    if (!hasProjects) {
+      projectsCollapsed = false;
+      if (els.projectsListWrap) els.projectsListWrap.hidden = false;
+    }
+    els.projectList.innerHTML = "";
+    projects.forEach((p) => {
+      const row = document.createElement("div");
+      row.className = "project-item-row";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "project-item" + (p.id === activeProjectId ? " is-active" : "");
+      btn.innerHTML =
+        '<span class="icon-folder" aria-hidden="true"></span><span class="project-item-name">' +
+        escapeHtml(p.name || "Project") +
+        "</span>";
+      btn.addEventListener("click", () => selectProject(p.id));
+
+      const menuBtn = document.createElement("button");
+      menuBtn.type = "button";
+      menuBtn.className = "project-item-menu-btn" + (projectMenuOpenId === p.id ? " is-open" : "");
+      menuBtn.setAttribute("aria-label", "Project options");
+      menuBtn.innerHTML = '<span class="icon-ellipsis" aria-hidden="true"></span>';
+      menuBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        projectMenuOpenId = projectMenuOpenId === p.id ? null : p.id;
+        renderProjectList();
+      });
+
+      row.appendChild(btn);
+      row.appendChild(menuBtn);
+
+      if (projectMenuOpenId === p.id) {
+        const menu = document.createElement("div");
+        menu.className = "project-item-menu";
+        const rowRect = row.getBoundingClientRect();
+        const scrollWrap = row.closest(".sidebar-scroll");
+        const wrapRect = scrollWrap ? scrollWrap.getBoundingClientRect() : null;
+        const estimatedMenuHeight = 180;
+        const spaceBelow = wrapRect ? wrapRect.bottom - rowRect.bottom : window.innerHeight - rowRect.bottom;
+        const spaceAbove = wrapRect ? rowRect.top - wrapRect.top : rowRect.top;
+        if (spaceBelow < estimatedMenuHeight && spaceAbove > estimatedMenuHeight) {
+          menu.classList.add("open-up");
+        }
+        const rename = document.createElement("button");
+        rename.type = "button";
+        rename.className = "project-item-menu-action";
+        rename.innerHTML =
+          '<span class="project-item-menu-action-icon icon-edit" aria-hidden="true"></span><span>Rename project</span>';
+        rename.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          renameProject(p.id);
+        });
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "project-item-menu-action is-danger";
+        del.innerHTML =
+          '<span class="project-item-menu-action-icon icon-trash" aria-hidden="true"></span><span>Delete project</span>';
+        del.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          deleteProject(p.id);
+        });
+        menu.appendChild(rename);
+        menu.appendChild(del);
+        row.appendChild(menu);
+      }
+      els.projectList.appendChild(row);
+    });
+  }
+
+  function renderProjectWorkspace() {
+    if (!els.projectWorkspace || !els.projectWorkspaceTitle) return;
+    const p = activeProject();
+    if (!p || temporaryChatMode) {
+      els.projectWorkspace.hidden = true;
+      return;
+    }
+    const hasRows = chats.some(
+      (c) => c.projectId === p.id && !c.archived && Array.isArray(c.messages) && c.messages.length > 0
+    );
+    els.projectWorkspace.hidden = false;
+    els.projectWorkspaceTitle.textContent = p.name || "Project";
+    const body = els.projectWorkspace.querySelector(".project-workspace-body");
+    if (body) body.hidden = !(projectOverviewOpen && hasRows);
+  }
+
+  function syncProjectOverviewUi() {
+    if (!els.app) return;
+    els.app.classList.toggle("project-overview-open", !!(projectOverviewOpen && activeProjectId && !temporaryChatMode));
+  }
+
+  function renderProjectChatList() {
+    if (!els.projectChatList) return;
+    els.projectChatList.innerHTML = "";
+    const p = activeProject();
+    if (!p) return;
+    const rows = chats
+      .filter((c) => c.projectId === p.id && !c.archived)
+      .filter((c) => Array.isArray(c.messages) && c.messages.length > 0)
+      .slice()
+      .reverse();
+    if (rows.length === 0) return;
+    rows.forEach((c) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "project-chat-item" + (c.id === activeId ? " is-active" : "");
+      const title = getChatSearchTitle(c);
+      const snippet = buildMatchedSnippet(c, "");
+      btn.innerHTML =
+        '<span class="search-result-icon" aria-hidden="true"><span class="icon-chat-bubble"></span></span>' +
+        '<span class="search-result-text"><span class="search-result-title">' +
+        escapeHtml(title) +
+        "</span>" +
+        '<span class="search-result-snippet">' +
+        escapeHtml(snippet || "No messages yet") +
+        "</span></span>";
+      btn.addEventListener("click", () => selectChat(c.id));
+      els.projectChatList.appendChild(btn);
+    });
+  }
+
+  function updateActiveProjectInstructions(text) {
+    const p = activeProject();
+    if (!p) return;
+    p.instructions = String(text || "");
+    save();
+  }
+
+  function renameProject(projectId) {
+    const p = projects.find((x) => x.id === projectId);
+    if (!p) return;
+    projectMenuOpenId = null;
+    renderProjectList();
+    openProjectModal({ mode: "rename", projectId: projectId });
+  }
+
+  function createRecentChatRow(chat, options) {
+    const opts = options || {};
+    const isArchivedList = !!opts.archived;
+    const row = document.createElement("div");
+    row.className = "chat-item-row";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chat-item" + (chat.id === activeId ? " is-active" : "");
+    btn.role = "listitem";
+    btn.textContent = (chat.pinned ? "📌 " : "") + (chat.title || "New chat");
+    btn.addEventListener("click", () => selectChat(chat.id));
+
+    const menuBtn = document.createElement("button");
+    menuBtn.type = "button";
+    menuBtn.className = "chat-item-menu-btn" + (recentMenuOpenId === chat.id ? " is-open" : "");
+    menuBtn.setAttribute("aria-label", "Chat options");
+    menuBtn.innerHTML = '<span class="icon-ellipsis" aria-hidden="true"></span>';
+    menuBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      recentMenuOpenId = recentMenuOpenId === chat.id ? null : chat.id;
+      renderChatList();
+    });
+
+    row.appendChild(btn);
+    row.appendChild(menuBtn);
+
+    if (recentMenuOpenId === chat.id) {
+      const menu = document.createElement("div");
+      menu.className = "project-item-menu";
+
+      if (!isArchivedList) {
+        const pin = document.createElement("button");
+        pin.type = "button";
+        pin.className = "project-item-menu-action";
+        pin.innerHTML =
+          '<span class="project-item-menu-action-icon icon-pin" aria-hidden="true"></span><span>' +
+          (chat.pinned ? "Unpin" : "Pin") +
+          "</span>";
+        pin.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          togglePinById(chat.id);
+        });
+        menu.appendChild(pin);
+      }
+
+      const archive = document.createElement("button");
+      archive.type = "button";
+      archive.className = "project-item-menu-action";
+      archive.innerHTML =
+        '<span class="project-item-menu-action-icon icon-archive" aria-hidden="true"></span><span>' +
+        (isArchivedList ? "Unarchive" : "Archive") +
+        "</span>";
+      archive.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleArchiveById(chat.id);
+      });
+
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "project-item-menu-action is-danger";
+      del.innerHTML =
+        '<span class="project-item-menu-action-icon icon-trash" aria-hidden="true"></span><span>Delete</span>';
+      del.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        deleteChatById(chat.id);
+      });
+
+      menu.appendChild(archive);
+      menu.appendChild(del);
+      row.appendChild(menu);
+    }
+
+    return row;
+  }
+
+  function togglePinById(chatId) {
+    const chat = chats.find((c) => c.id === chatId);
+    if (!chat) return;
+    chat.pinned = !chat.pinned;
+    recentMenuOpenId = null;
+    save();
+    renderChatList();
+    updateChatMenuState();
+  }
+
+  function toggleArchiveById(chatId) {
+    const chat = chats.find((c) => c.id === chatId);
+    if (!chat) return;
+    chat.archived = !chat.archived;
+    if (chat.archived) {
+      chat.pinned = false;
+    }
+    if (chat.id === activeId && chat.archived) {
+      const next = chats.find((c) => !c.projectId && !c.archived && c.id !== chat.id) || null;
+      if (next) {
+        activeId = next.id;
+      } else {
+        const id = uid();
+        chats.unshift({ id, title: "New chat", projectId: null, messages: [] });
+        activeId = id;
+      }
+    }
+    recentMenuOpenId = null;
+    save();
+    renderChatList();
+    renderMessages();
+    updateEmptyState();
+    updateChatMenuState();
+  }
+
+  function deleteChatById(chatId) {
+    const chat = chats.find((c) => c.id === chatId);
+    if (!chat) return;
+    const ok = window.confirm("Delete this chat?");
+    if (!ok) return;
+    const idx = chats.findIndex((c) => c.id === chatId);
+    if (idx >= 0) chats.splice(idx, 1);
+    if (chatId === activeId) {
+      const next = chats.find((c) => !c.projectId && !c.archived) || null;
+      if (next) activeId = next.id;
+      else {
+        const id = uid();
+        chats.unshift({ id, title: "New chat", projectId: null, messages: [] });
+        activeId = id;
+      }
+    }
+    recentMenuOpenId = null;
+    save();
+    renderChatList();
+    renderMessages();
+    updateEmptyState();
+    updateChatMenuState();
+  }
+
+  function deleteProject(projectId) {
+    const p = projects.find((x) => x.id === projectId);
+    if (!p) return;
+    const ok = window.confirm("Delete project '" + (p.name || "Project") + "'?");
+    if (!ok) return;
+    projects = projects.filter((x) => x.id !== projectId);
+    chats.forEach((c) => {
+      if (c.projectId === projectId) c.projectId = null;
+    });
+    if (activeProjectId === projectId) activeProjectId = null;
+    projectMenuOpenId = null;
+    renderChatList();
+    renderMessages();
+    updateEmptyState();
+    save();
+  }
+
+  function syncProjectsCollapseUi() {
+    if (!els.btnProjectsToggle || !els.projectsListWrap) return;
+    els.btnProjectsToggle.setAttribute("aria-expanded", projectsCollapsed ? "false" : "true");
+    els.projectsListWrap.hidden = projectsCollapsed;
+  }
+
+  function syncRecentsCollapseUi() {
+    if (!els.btnRecentsToggle || !els.recentsListWrap) return;
+    els.btnRecentsToggle.setAttribute("aria-expanded", recentsCollapsed ? "false" : "true");
+    els.recentsListWrap.hidden = recentsCollapsed;
+  }
+
+  function syncArchivedCollapseUi() {
+    if (!els.btnArchivedToggle || !els.archivedListWrap) return;
+    els.btnArchivedToggle.setAttribute("aria-expanded", archivedCollapsed ? "false" : "true");
+    els.archivedListWrap.hidden = archivedCollapsed;
+  }
+
+  function selectProject(projectId) {
+    if (temporaryChatMode) setTemporaryChatMode(false);
+    activeProjectId = projectId || null;
+    projectOverviewOpen = !!activeProjectId;
+    const inScopeAll = chats.filter((c) => chatInCurrentScope(c));
+    const inScopeWithMessages = inScopeAll.filter((c) => Array.isArray(c.messages) && c.messages.length > 0);
+    if (inScopeWithMessages.length > 0 && !inScopeWithMessages.some((c) => c.id === activeId)) {
+      activeId = (inScopeWithMessages[0] || inScopeAll[0]).id;
+    }
+    if (!activeProjectId) {
+      projectOverviewOpen = false;
+    }
+    renderChatList();
+    renderMessages();
+    updateEmptyState();
+    save();
+    closeSidebarMobile();
+  }
+
   function updateEmptyState() {
+    if (projectOverviewOpen && activeProjectId && !temporaryChatMode) {
+      els.emptyState.hidden = true;
+      els.messages.hidden = true;
+      if (els.suggestionGrid) els.suggestionGrid.hidden = true;
+      if (els.temporaryChatNotice) els.temporaryChatNotice.hidden = true;
+      updateScrollBottomButton();
+      return;
+    }
     const chat = activeChat();
     const empty = !chat || chat.messages.length === 0;
     const hasDraftPrompt = !!(els.messageInput && els.messageInput.value.trim().length > 0);
     const showTemporaryNotice = temporaryChatMode && empty;
-    els.emptyState.hidden = !empty || showTemporaryNotice;
+    const inProject = !!activeProjectId;
+    els.emptyState.hidden = !empty || showTemporaryNotice || inProject;
     els.messages.hidden = empty;
+    const shouldShowSuggestions = empty && !hasDraftPrompt && !temporaryChatMode && !inProject;
+    if (shouldShowSuggestions) {
+      const key = activeId || "__none__";
+      if (lastSuggestionsChatId !== key) {
+        buildSuggestions();
+        lastSuggestionsChatId = key;
+      }
+    } else {
+      lastSuggestionsChatId = null;
+    }
     if (els.suggestionGrid) {
       // Show built-in prompt cards only for a fresh chat with no typed draft.
-      els.suggestionGrid.hidden = !empty || hasDraftPrompt || temporaryChatMode;
+      els.suggestionGrid.hidden = !shouldShowSuggestions;
     }
     if (els.temporaryChatNotice) {
       els.temporaryChatNotice.hidden = !showTemporaryNotice;
@@ -478,6 +934,21 @@
       if (canEditUserMessage(messageIndex)) {
         const tools = document.createElement("div");
         tools.className = "msg-user-tools";
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "msg-user-edit-btn";
+        copyBtn.innerHTML = '<span class="msg-action-icon icon-copy" aria-hidden="true"></span><span>Copy</span>';
+        copyBtn.title = "Copy message";
+        copyBtn.addEventListener("click", async () => {
+          const ok = await copyToClipboard(content);
+          const label = copyBtn.querySelector("span:last-child");
+          if (label) label.textContent = ok ? "Copied" : "Failed";
+          window.setTimeout(() => {
+            const resetLabel = copyBtn.querySelector("span:last-child");
+            if (resetLabel) resetLabel.textContent = "Copy";
+          }, 1200);
+        });
+        tools.appendChild(copyBtn);
         const editBtn = document.createElement("button");
         editBtn.type = "button";
         editBtn.className = "msg-user-edit-btn";
@@ -797,6 +1268,7 @@
     const chat = activeChat();
     if (!chat) {
       updateScrollBottomButton();
+      updateChatMenuState();
       return;
     }
     chat.messages.forEach((m, i) => {
@@ -804,6 +1276,7 @@
     });
     autoScrollLockedToBottom = true;
     scrollThreadToBottom(true);
+    updateChatMenuState();
   }
 
   function selectChat(id) {
@@ -814,6 +1287,9 @@
     closeModelMenu();
     closeShareModal();
     closeSearchModal({ restoreFocus: false });
+    const selected = chats.find((c) => c.id === id) || null;
+    activeProjectId = selected && selected.projectId ? selected.projectId : null;
+    projectOverviewOpen = false;
     activeId = id;
     save();
     renderChatList();
@@ -1001,6 +1477,86 @@
     });
   }
 
+  function closeProjectModal() {
+    if (!els.projectModalRoot || !els.projectModalRoot.classList.contains("is-open")) return;
+    els.projectModalRoot.classList.remove("is-open");
+    els.projectModalRoot.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    projectModalMode = "create";
+    projectModalTargetId = null;
+  }
+
+  function openProjectModal(options) {
+    if (!els.projectModalRoot) return;
+    const opts = options || {};
+    const mode = opts.mode === "rename" ? "rename" : "create";
+    projectModalMode = mode;
+    projectModalTargetId = mode === "rename" ? opts.projectId || null : null;
+    closeChatMenu();
+    closeModelMenu();
+    closeSearchModal({ restoreFocus: false });
+    els.projectModalRoot.classList.add("is-open");
+    els.projectModalRoot.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    if (els.projectNameInput) {
+      let initialName = "";
+      if (mode === "rename" && projectModalTargetId) {
+        const p = projects.find((x) => x.id === projectModalTargetId);
+        initialName = p ? p.name || "" : "";
+      }
+      els.projectNameInput.value = initialName;
+      if (els.projectModal && els.projectModal.querySelector) {
+        const title = els.projectModal.querySelector(".project-modal-title");
+        if (title) title.textContent = mode === "rename" ? "Rename project" : "Create project";
+        const submit = els.projectModal.querySelector('.project-modal-submit[type="submit"]');
+        if (submit) submit.textContent = mode === "rename" ? "Save" : "Create project";
+      }
+      requestAnimationFrame(() => els.projectNameInput.focus());
+    }
+  }
+
+  function createProject(name) {
+    const n = String(name || "").trim();
+    if (!n) return;
+    const p = {
+      id: uid(),
+      name: n,
+      instructions: "",
+    };
+    projects.unshift(p);
+    activeProjectId = p.id;
+    const id = uid();
+    chats.unshift({ id, title: "New chat", projectId: p.id, messages: [] });
+    activeId = id;
+    closeProjectModal();
+    renderChatList();
+    renderMessages();
+    updateEmptyState();
+    save();
+  }
+
+  function createFreshProjectChat() {
+    if (!activeProjectId) return;
+    const id = uid();
+    chats.unshift({ id, title: "New chat", projectId: activeProjectId, messages: [] });
+    activeId = id;
+  }
+
+  function submitProjectModal(name) {
+    const n = String(name || "").trim();
+    if (!n) return;
+    if (projectModalMode === "rename" && projectModalTargetId) {
+      const p = projects.find((x) => x.id === projectModalTargetId);
+      if (!p) return;
+      p.name = n;
+      closeProjectModal();
+      renderChatList();
+      save();
+      return;
+    }
+    createProject(n);
+  }
+
   function openSidebarMobile() {
     closeModelMenu();
     els.sidebar.classList.add("is-open");
@@ -1053,7 +1609,12 @@
     }
   }
 
-  function newChat() {
+  function newChat(options) {
+    const opts = options || {};
+    const keepProject = !!opts.keepProject;
+    const wasProjectOverviewOpen = projectOverviewOpen;
+    const targetProjectId = keepProject ? activeProjectId || null : null;
+    const shouldRefreshSuggestions = !keepProject && !temporaryChatMode;
     const resetComposerDraft = () => {
       if (!els.messageInput) return;
       els.messageInput.value = "";
@@ -1065,16 +1626,28 @@
     closeChatMenu();
     closeModelMenu();
     closeShareModal();
+    if (!keepProject) {
+      // Sidebar new chat returns to general chat mode.
+      activeProjectId = null;
+    }
+    // Re-open project overview/history when creating a chat in project context.
+    projectOverviewOpen = keepProject ? true : false;
     if (temporaryChatMode) {
       temporaryChat = { id: "temporary", title: "Temporary chat", messages: [] };
       renderMessages();
       resetComposerDraft();
+      if (shouldRefreshSuggestions) buildSuggestions();
       closeSidebarMobile();
       els.messageInput.focus();
       return;
     }
     const existing = activeChat();
-    if (existing && Array.isArray(existing.messages) && existing.messages.length === 0) {
+    if (
+      existing &&
+      Array.isArray(existing.messages) &&
+      existing.messages.length === 0 &&
+      ((existing.projectId || null) === targetProjectId)
+    ) {
       // Reuse current empty draft chat instead of creating history clutter.
       resetComposerDraft();
       closeSidebarMobile();
@@ -1082,12 +1655,13 @@
       return;
     }
     const id = uid();
-    chats.unshift({ id, title: "New chat", messages: [] });
+    chats.unshift({ id, title: "New chat", projectId: targetProjectId, messages: [] });
     activeId = id;
     save();
     renderChatList();
     renderMessages();
     resetComposerDraft();
+    if (shouldRefreshSuggestions) buildSuggestions();
     closeSidebarMobile();
     els.messageInput.focus();
   }
@@ -1411,7 +1985,7 @@
       }
     }
     if (els.messageInput) {
-      els.messageInput.placeholder = temporaryChatMode ? "Temporary chat" : "Ask CheapGPT";
+      els.messageInput.placeholder = temporaryChatMode ? "Temporary chat" : "Ask anything";
     }
     renderMessages();
     renderChatList();
@@ -1515,26 +2089,35 @@
 
   function updateChatMenuState() {
     const chat = activeChat();
+    const hasLoadedThread = !(projectOverviewOpen && activeProjectId);
     const hasAssistantResponse =
+      hasLoadedThread &&
       !!chat &&
       !temporaryChatMode &&
       Array.isArray(chat.messages) &&
       chat.messages.some((m) => m && m.role === "assistant" && typeof m.content === "string" && m.content.trim().length > 0);
+    if (els.btnChatMenu) {
+      els.btnChatMenu.hidden = !hasAssistantResponse;
+      els.btnChatMenu.setAttribute("aria-hidden", hasAssistantResponse ? "false" : "true");
+      if (!hasAssistantResponse) {
+        closeChatMenu();
+      }
+    }
     if (els.menuShare) {
-      els.menuShare.disabled = !hasAssistantResponse;
+      els.menuShare.disabled = false;
     }
     if (els.menuPinChat) {
-      els.menuPinChat.disabled = !hasAssistantResponse;
+      els.menuPinChat.disabled = false;
       const label = els.menuPinChat.querySelector(".chat-menu-item-label");
       if (label) label.textContent = chat && chat.pinned ? "Unpin chat" : "Pin chat";
     }
     if (els.menuArchiveChat) {
-      els.menuArchiveChat.disabled = !hasAssistantResponse;
+      els.menuArchiveChat.disabled = false;
       const label = els.menuArchiveChat.querySelector(".chat-menu-item-label");
-      if (label) label.textContent = chat && chat.archived ? "Unarchive chat" : "Archive chat";
+      if (label) label.textContent = chat && chat.archived ? "Unarchive" : "Archive";
     }
     if (els.menuDeleteChat) {
-      els.menuDeleteChat.disabled = !hasAssistantResponse;
+      els.menuDeleteChat.disabled = false;
     }
   }
 
@@ -1591,6 +2174,9 @@
     if (!chat) return;
     chat.archived = !chat.archived;
     if (chat.archived) {
+      chat.pinned = false;
+    }
+    if (chat.archived) {
       const next = chats.find((c) => c.id !== chat.id && !c.archived);
       if (next) {
         activeId = next.id;
@@ -1611,17 +2197,30 @@
     if (temporaryChatMode) return;
     const chat = activeChat();
     if (!chat) return;
+    const deletingWithinProject = !!(activeProjectId && chat.projectId === activeProjectId);
     const ok = window.confirm("Delete this chat?");
     if (!ok) return;
     const idx = chats.findIndex((c) => c.id === chat.id);
     if (idx >= 0) chats.splice(idx, 1);
-    const next = chats.find((c) => !c.archived) || chats[0];
-    if (!next) {
-      const id = uid();
-      chats.push({ id, title: "New chat", messages: [] });
-      activeId = id;
+
+    if (deletingWithinProject) {
+      const nextProjectChat = chats.find((c) => c.projectId === activeProjectId && !c.archived);
+      if (nextProjectChat) {
+        activeId = nextProjectChat.id;
+        projectOverviewOpen = false;
+      } else {
+        // Stay in project mode and show empty project overview.
+        projectOverviewOpen = true;
+      }
     } else {
-      activeId = next.id;
+      const next = chats.find((c) => !c.archived) || chats[0];
+      if (!next) {
+        const id = uid();
+        chats.push({ id, title: "New chat", projectId: null, messages: [] });
+        activeId = id;
+      } else {
+        activeId = next.id;
+      }
     }
     save();
     renderChatList();
@@ -2005,12 +2604,20 @@
     let reply = "";
     let latestAccumulated = "";
     let outboundMessages = chat.messages;
+    const project = activeProject();
+    const projectInstructions = project && project.instructions ? String(project.instructions).trim() : "";
+    if (projectInstructions) {
+      outboundMessages = [{ role: "system", content: projectInstructions }].concat(outboundMessages);
+    }
     if (!regenerate) {
       const quote = normalizedQuoteContext;
       if (quote) {
         const idx = chat.messages.length - 1;
         if (idx >= 0) {
-          outboundMessages = chat.messages.slice();
+          const baseMessages = outboundMessages.filter((m) => m.role !== "system");
+          outboundMessages = projectInstructions
+            ? [{ role: "system", content: projectInstructions }].concat(baseMessages)
+            : baseMessages.slice();
           outboundMessages[idx] = {
             ...outboundMessages[idx],
             content: 'Quoted excerpt: "' + quote + '"\n\nFollow-up question: ' + userText,
@@ -2056,7 +2663,38 @@
 
   function buildSuggestions() {
     els.suggestionGrid.innerHTML = "";
+    const shuffle = function (arr) {
+      const out = arr.slice();
+      for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = out[i];
+        out[i] = out[j];
+        out[j] = t;
+      }
+      return out;
+    };
+
+    const grouped = { tech: [], practical: [], creative: [] };
     suggestions.forEach((s) => {
+      const key = grouped[s.category] ? s.category : "practical";
+      grouped[key].push(s);
+    });
+
+    const picked = [];
+    ["tech", "practical", "creative"].forEach((key) => {
+      const bucket = shuffle(grouped[key]);
+      if (bucket[0]) picked.push(bucket[0]);
+    });
+
+    const remaining = shuffle(
+      suggestions.filter((s) => !picked.includes(s))
+    );
+    while (picked.length < 4 && remaining.length > 0) {
+      picked.push(remaining.shift());
+    }
+
+    const visible = shuffle(picked).slice(0, 4);
+    visible.forEach((s) => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "suggestion-card";
@@ -2139,6 +2777,9 @@
   initTheme();
   applySidebarDesktopState(getSavedSidebarHidden());
   load();
+  syncProjectsCollapseUi();
+  syncRecentsCollapseUi();
+  syncArchivedCollapseUi();
   buildSuggestions();
   renderChatList();
   renderMessages();
@@ -2194,6 +2835,50 @@
     els.btnSidebarSearch.addEventListener("pointerup", handleSidebarSearchActivate);
     els.btnSidebarSearch.addEventListener("touchend", handleSidebarSearchActivate, { passive: false });
   }
+  if (els.btnProjectsToggle) {
+    els.btnProjectsToggle.addEventListener("click", () => {
+      projectsCollapsed = !projectsCollapsed;
+      syncProjectsCollapseUi();
+      save();
+    });
+  }
+  if (els.btnRecentsToggle) {
+    els.btnRecentsToggle.addEventListener("click", () => {
+      recentsCollapsed = !recentsCollapsed;
+      syncRecentsCollapseUi();
+      save();
+    });
+  }
+  if (els.btnArchivedToggle) {
+    els.btnArchivedToggle.addEventListener("click", () => {
+      archivedCollapsed = !archivedCollapsed;
+      syncArchivedCollapseUi();
+      save();
+    });
+  }
+  if (els.btnProjectNew) {
+    els.btnProjectNew.addEventListener("click", () => openProjectModal());
+  }
+  if (els.btnProjectNewChat) {
+    els.btnProjectNewChat.addEventListener("click", () => newChat({ keepProject: true }));
+  }
+  if (els.projectInstructionsInput) {
+    els.projectInstructionsInput.addEventListener("input", () => {
+      updateActiveProjectInstructions(els.projectInstructionsInput.value);
+    });
+  }
+  if (els.btnProjectModalCancel) {
+    els.btnProjectModalCancel.addEventListener("click", () => closeProjectModal());
+  }
+  if (els.projectModalBackdrop) {
+    els.projectModalBackdrop.addEventListener("click", () => closeProjectModal());
+  }
+  if (els.projectModalForm) {
+    els.projectModalForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      submitProjectModal(els.projectNameInput ? els.projectNameInput.value : "");
+    });
+  }
   if (els.searchModalClose) {
     els.searchModalClose.addEventListener("click", () => closeSearchModal());
   }
@@ -2234,7 +2919,7 @@
     els.btnRailNewChat.addEventListener("click", newChat);
   }
   if (els.btnTopNewChat) {
-    els.btnTopNewChat.addEventListener("click", newChat);
+    els.btnTopNewChat.addEventListener("click", () => newChat({ keepProject: true }));
   }
   if (els.btnSettings) {
     els.btnSettings.addEventListener("click", () => {
@@ -2345,6 +3030,15 @@
     e.preventDefault();
     const text = els.messageInput.value;
     if (!text.trim()) return;
+    if (projectOverviewOpen && activeProjectId) {
+      createFreshProjectChat();
+      projectOverviewOpen = false;
+      syncProjectOverviewUi();
+      renderProjectWorkspace();
+      renderChatList();
+      renderMessages();
+      updateEmptyState();
+    }
     const quoteContext = pendingQuoteContextText;
     els.messageInput.value = "";
     autosize();
@@ -2404,11 +3098,28 @@
     if (!selectionAskButton || selectionAskButton.hidden) return;
     if (!selectionAskButton.contains(e.target)) hideSelectionAskButton();
   });
+  document.addEventListener("mousedown", (e) => {
+    if (!projectMenuOpenId) return;
+    const target = e.target;
+    if (target && target.closest && target.closest(".project-item-row")) return;
+    projectMenuOpenId = null;
+    renderProjectList();
+  });
+  document.addEventListener("mousedown", (e) => {
+    if (!recentMenuOpenId) return;
+    const target = e.target;
+    if (target && target.closest && target.closest(".chat-item-row")) return;
+    recentMenuOpenId = null;
+    renderChatList();
+  });
   if (els.thread) {
     els.thread.addEventListener("scroll", hideSelectionAskButton, { passive: true });
   }
   window.addEventListener("resize", hideSelectionAskButton);
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") hideSelectionAskButton();
+    if (e.key === "Escape") {
+      hideSelectionAskButton();
+      closeProjectModal();
+    }
   });
 })();

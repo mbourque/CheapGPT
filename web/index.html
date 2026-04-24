@@ -55,12 +55,59 @@
             <span class="icon-search" aria-hidden="true"></span>
             <span>Search chats</span>
           </button>
-          <div class="sidebar-section-label" id="chatListLabel">Chats</div>
-          <nav class="chat-list" id="chatList" role="list"></nav>
-          <div class="sidebar-archived-block" id="archivedSection">
-            <div class="sidebar-section-label">Archived</div>
-            <nav class="chat-list" id="archivedChatList" role="list"></nav>
-          </div>
+          <section class="projects-block" id="projectsBlock" aria-label="Projects">
+            <div class="projects-head">
+              <button
+                type="button"
+                class="projects-toggle"
+                id="btnProjectsToggle"
+                aria-expanded="true"
+                aria-controls="projectsListWrap"
+              >
+                <span>Projects</span>
+                <span class="icon-projects-chevron" aria-hidden="true"></span>
+              </button>
+            </div>
+            <div class="projects-list-wrap" id="projectsListWrap">
+              <button type="button" class="btn-project-new" id="btnProjectNew">
+                <span class="icon-folder-plus" aria-hidden="true"></span>
+                <span>New Project</span>
+              </button>
+              <nav class="projects-list" id="projectList" role="list"></nav>
+            </div>
+          </section>
+          <section class="recents-block" id="recentsBlock" aria-label="Recents">
+            <div class="projects-head">
+              <button
+                type="button"
+                class="projects-toggle"
+                id="btnRecentsToggle"
+                aria-expanded="true"
+                aria-controls="recentsListWrap"
+              >
+                <span>Recents</span>
+                <span class="icon-projects-chevron" aria-hidden="true"></span>
+              </button>
+            </div>
+            <div class="recents-list-wrap" id="recentsListWrap">
+              <nav class="chat-list" id="chatList" role="list"></nav>
+            </div>
+          </section>
+          <section class="sidebar-archived-block" id="archivedSection">
+            <button
+              type="button"
+              class="projects-toggle"
+              id="btnArchivedToggle"
+              aria-expanded="true"
+              aria-controls="archivedListWrap"
+            >
+              <span>Archived</span>
+              <span class="icon-projects-chevron" aria-hidden="true"></span>
+            </button>
+            <div class="archived-list-wrap" id="archivedListWrap">
+              <nav class="chat-list" id="archivedChatList" role="list"></nav>
+            </div>
+          </section>
         </div>
 
         <div class="sidebar-footer">
@@ -157,11 +204,11 @@
                 </button>
                 <button type="button" class="chat-menu-item" id="menuArchiveChat" role="menuitem">
                   <span class="chat-menu-item-icon icon-archive"></span>
-                  <span class="chat-menu-item-label">Archive chat</span>
+                  <span class="chat-menu-item-label">Archive</span>
                 </button>
                 <button type="button" class="chat-menu-item chat-menu-item-danger" id="menuDeleteChat" role="menuitem">
                   <span class="chat-menu-item-icon icon-trash"></span>
-                  <span class="chat-menu-item-label">Delete chat</span>
+                  <span class="chat-menu-item-label">Delete</span>
                 </button>
               </div>
             </div>
@@ -169,6 +216,17 @@
         </header>
 
         <main class="thread" id="thread" aria-live="polite">
+          <section class="project-workspace" id="projectWorkspace" hidden aria-label="Project chat history">
+            <div class="project-workspace-head">
+              <div class="project-workspace-title-row">
+                <span class="project-workspace-title-icon icon-folder" aria-hidden="true"></span>
+                <h2 class="project-workspace-title" id="projectWorkspaceTitle">Project</h2>
+              </div>
+            </div>
+            <div class="project-workspace-body">
+              <nav class="project-chat-list" id="projectChatList" role="list"></nav>
+            </div>
+          </section>
           <div class="temporary-chat-notice" id="temporaryChatNotice" hidden>
             <h2 class="temporary-chat-notice-title">Temporary Chat</h2>
             <p class="temporary-chat-notice-text">
@@ -207,7 +265,7 @@
                   id="messageInput"
                   class="composer-input"
                   rows="1"
-                  placeholder="Ask CheapGPT"
+                  placeholder="Ask anything"
                   maxlength="32000"
                 ></textarea>
                 <div class="composer-toolbar">
@@ -336,6 +394,23 @@
               <div class="search-modal-results" id="searchModalResults" role="list" aria-label="Chat search results"></div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="project-modal-root" id="projectModalRoot" aria-hidden="true">
+        <div class="project-modal-backdrop" id="projectModalBackdrop" aria-hidden="true"></div>
+        <div class="project-modal" id="projectModal" role="dialog" aria-modal="true" aria-label="Create project" tabindex="-1">
+          <form class="project-modal-form" id="projectModalForm" autocomplete="off">
+            <h2 class="project-modal-title">Create project</h2>
+            <label class="project-modal-field">
+              <span>Project name</span>
+              <input type="text" id="projectNameInput" class="project-modal-input" maxlength="100" required />
+            </label>
+            <div class="project-modal-actions">
+              <button type="button" class="settings-cancel" id="btnProjectModalCancel">Cancel</button>
+              <button type="submit" class="project-modal-submit">Create project</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

@@ -2501,6 +2501,20 @@
   }
 
   /**
+   * Full thread for Ollama: clone active chat turns as plain { role, content } so outbound
+   * tweaks never alias stored chat.messages, and extra UI fields are not sent.
+   * @param {{ messages?: { role: string, content?: string }[] }} chat
+   * @returns {{ role: string, content: string }[]}
+   */
+  function cloneChatMessagesForApi(chat) {
+    if (!chat || !Array.isArray(chat.messages)) return [];
+    return chat.messages.map((m) => ({
+      role: m.role,
+      content: typeof m.content === "string" ? m.content : String(m.content ?? ""),
+    }));
+  }
+
+  /**
    * @param {{ role: string, content: string }[]} messages
    * @param {(accumulated: string) => void} onDelta
    * @returns {Promise<string>}
@@ -2560,6 +2574,8 @@
       ensureTitleFromFirstMessage(userText);
     }
 
+    setComposerBusy(true);
+    try {
     updateEmptyState();
     renderMessages();
 
@@ -2567,7 +2583,6 @@
     const md = body.querySelector(".markdown-body");
     if (!md) return;
 
-    setComposerBusy(true);
     const shouldShowThinking = thinkingMode && modelSupportsThinking(selectedModel);
     let thinkingTimer = null;
     let thinkingStart = 0;
@@ -2603,27 +2618,23 @@
 
     let reply = "";
     let latestAccumulated = "";
-    let outboundMessages = chat.messages;
+    let outboundMessages = cloneChatMessagesForApi(chat);
     const project = activeProject();
     const projectInstructions = project && project.instructions ? String(project.instructions).trim() : "";
-    if (projectInstructions) {
-      outboundMessages = [{ role: "system", content: projectInstructions }].concat(outboundMessages);
-    }
     if (!regenerate) {
       const quote = normalizedQuoteContext;
       if (quote) {
         const idx = chat.messages.length - 1;
-        if (idx >= 0) {
-          const baseMessages = outboundMessages.filter((m) => m.role !== "system");
-          outboundMessages = projectInstructions
-            ? [{ role: "system", content: projectInstructions }].concat(baseMessages)
-            : baseMessages.slice();
+        if (idx >= 0 && outboundMessages[idx] && outboundMessages[idx].role === "user") {
           outboundMessages[idx] = {
-            ...outboundMessages[idx],
+            role: "user",
             content: 'Quoted excerpt: "' + quote + '"\n\nFollow-up question: ' + userText,
           };
         }
       }
+    }
+    if (projectInstructions) {
+      outboundMessages = [{ role: "system", content: projectInstructions }].concat(outboundMessages);
     }
     try {
       reply = await streamChat(outboundMessages, (full) => {
@@ -2657,8 +2668,10 @@
     save();
     // Re-render so the completed assistant message gets its action toolbar.
     renderMessages();
-    setComposerBusy(false);
-    updateSendState();
+    } finally {
+      setComposerBusy(false);
+      updateSendState();
+    }
   }
 
   function buildSuggestions() {

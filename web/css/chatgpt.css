@@ -880,6 +880,44 @@ textarea {
   }
 }
 
+/*
+ * Mobile keyboard: keep the shell inside the Visual Viewport and prevent document
+ * scrolling so the top bar doesn’t slide off-screen when focusing the composer.
+ * --mobile-vvh is set from visualViewport in chat.js.
+ */
+@media (max-width: 768px) {
+  html {
+    height: var(--mobile-vvh, 100dvh);
+    max-height: var(--mobile-vvh, 100dvh);
+    overflow: hidden;
+  }
+
+  body {
+    height: var(--mobile-vvh, 100dvh);
+    max-height: var(--mobile-vvh, 100dvh);
+    overflow: hidden;
+    overscroll-behavior-y: none;
+    position: relative;
+  }
+
+  .app {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .main-wrap {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .top-bar {
+    flex-shrink: 0;
+    background: var(--bg-app);
+  }
+}
+
 .settings-page-inner {
   max-width: 720px;
   margin: 0 auto;

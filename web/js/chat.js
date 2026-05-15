@@ -3104,6 +3104,53 @@
   renderPendingQuoteContext();
   autosize();
 
+  (function initMobileVisualViewport() {
+    let rafId = 0;
+    function syncMobileVisualViewportHeight() {
+      rafId = 0;
+      const mq = window.matchMedia("(max-width: 768px)");
+      if (!mq.matches) {
+        document.documentElement.style.removeProperty("--mobile-vvh");
+        return;
+      }
+      const vv = window.visualViewport;
+      const h = vv ? Math.max(0, Math.round(vv.height)) : window.innerHeight;
+      document.documentElement.style.setProperty("--mobile-vvh", h + "px");
+      if (vv && vv.offsetTop > 0) {
+        window.scrollTo(0, 0);
+      }
+    }
+    function scheduleSync() {
+      if (rafId) return;
+      rafId = requestAnimationFrame(syncMobileVisualViewportHeight);
+    }
+
+    syncMobileVisualViewportHeight();
+    window.addEventListener("resize", scheduleSync);
+    window.addEventListener("orientationchange", scheduleSync);
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener("resize", scheduleSync);
+      vv.addEventListener("scroll", scheduleSync);
+    }
+    const mqMobile = window.matchMedia("(max-width: 768px)");
+    if (typeof mqMobile.addEventListener === "function") {
+      mqMobile.addEventListener("change", scheduleSync);
+    } else if (typeof mqMobile.addListener === "function") {
+      mqMobile.addListener(scheduleSync);
+    }
+
+    if (els.messageInput) {
+      els.messageInput.addEventListener("focus", () => {
+        if (!window.matchMedia("(max-width: 768px)").matches) return;
+        scheduleSync();
+        requestAnimationFrame(() => {
+          window.scrollTo(0, 0);
+        });
+      });
+    }
+  })();
+
   document.addEventListener("selectionchange", () => {
     requestAnimationFrame(maybeShowSelectionAskButton);
   });
